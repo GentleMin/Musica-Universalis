@@ -92,17 +92,20 @@ class MagBG_T2(AxisymVectorBG):
         return Bp, Bt, Br
 
 
-class MagBG_T2_Cst(AxisymVectorBG):
+class MagBG_T2_Linear(AxisymVectorBG):
     """
-    T2-Shell, Constant
+    T2-Shell, linear profile
     """
 
-    def __init__(self, Ri=0.35, Ro=1.0, *args, **kwargs):
+    def __init__(self, Ri=0.35, Ro=1.0, Bi=1, Bo=1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.Ri = Ri
         self.Ro = Ro
-
+        self.Bi = Bi
+        self.Bo = Bo
+    
     def __call__(self, r, t):
-        Bp = np.ones_like(r)*np.sin(2*t)
+        Bp = ((np.ones_like(r) - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi)*np.sin(2*t)
         Bt = np.zeros((1, t.size, r.size))
         Br = np.zeros((1, t.size, r.size))
         return Bp, Bt, Br
@@ -173,6 +176,29 @@ class MagBG_SolarTa_pro(AxisymVectorBG):
         Plm_basis = qbasis.LegendrePlm(10, 0)
         spec_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
         fcla = (Plm_basis.op_dtheta(grid=t.flatten()) @ spec_Plm).reshape((1, t.size, 1))
+        Bp = frad*fcla
+        Bt = np.zeros((1, t.size, r.size))
+        Br = np.zeros((1, t.size, r.size))
+        return Bp, Bt, Br
+
+
+class MagBG_SolarT_Linear(AxisymVectorBG):
+    """
+    T2-Shell, linear profile
+    """
+
+    def __init__(self, Ri=0.35, Ro=1.0, Bi=1, Bo=1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.Ri = Ri
+        self.Ro = Ro
+        self.Bi = Bi
+        self.Bo = Bo
+        self.Plm_basis = qbasis.LegendrePlm(10, 0)
+        self.spec_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
+    
+    def __call__(self, r, t):
+        frad = (np.ones_like(r) - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi
+        fcla = (self.Plm_basis.op_dtheta(grid=t.flatten()) @ self.spec_Plm).reshape((1, t.size, 1))
         Bp = frad*fcla
         Bt = np.zeros((1, t.size, r.size))
         Br = np.zeros((1, t.size, r.size))

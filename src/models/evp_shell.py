@@ -2247,6 +2247,13 @@ class ModelEVP_MHDDiffRShell_TorPol:
         o_str = f'<{cls_name} geom={self.geometry} res={self.resolution}>'
         return o_str
     
+    def setup_model(self, **params_problem):
+
+        m = self.resolution[-1]
+        self.problem = self.setup_problem(1, 1, 1, 1, self.fields, **params_problem)
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.subprob = self.solver.subproblems_by_group[(m, None, None)]
+    
     def setup_eigenmat(self, Ek, Em, Le, Ro_r, set_problem: bool = True, **params_problem):
 
         m = self.resolution[-1]
