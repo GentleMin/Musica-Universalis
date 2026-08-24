@@ -182,7 +182,53 @@ class MagBG_SolarTa_pro(AxisymVectorBG):
         return Bp, Bt, Br
 
 
-class MagBG_SolarT_Linear(AxisymVectorBG):
+class MagBG_SolarTa_bimodal(AxisymVectorBG):
+
+    def __init__(self, Ri, Ro, *args, **kwargs):
+        self.Ri = Ri
+        self.Ro = Ro
+
+        L, Nr = 10, 7
+        Plm_basis = qbasis.LegendrePlm(L, 0)
+        T_basis = qbasis.ChebyshevT(Nr, interval=(Ri, Ro))
+        self.f_B0 = qfield.ShellTorPol_m(T_basis, Plm_basis, 'tor', dtype=np.float64)
+        s_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
+        s_T = np.array([ 1.41201805, -0.20244305,  0.0946188 , -0.1392218 , -0.24359233, -0.16432093, -0.05104973])
+        for l in range(L+1):
+            self.f_B0.spectrum[l*Nr:(l+1)*Nr] = s_Plm[l]*s_T
+
+    def __call__(self, r, t):
+        B0_val = self.f_B0.eval_mesh(r.flatten(), t.flatten())
+        Bp = B0_val['p'][np.newaxis, ...]
+        Bt = B0_val['t'][np.newaxis, ...]
+        Br = B0_val['r'][np.newaxis, ...]
+        return Bp, Bt, Br
+
+
+class MagBG_SolarTa_bimodal_varNBC(AxisymVectorBG):
+
+    def __init__(self, Ri, Ro, *args, **kwargs):
+        self.Ri = Ri
+        self.Ro = Ro
+
+        L, Nr = 10, 5
+        Plm_basis = qbasis.LegendrePlm(L, 0)
+        T_basis = qbasis.ChebyshevT(Nr, interval=(Ri, Ro))
+        self.f_B0 = qfield.ShellTorPol_m(T_basis, Plm_basis, 'tor', dtype=np.float64)
+        s_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
+        s_T = np.array([1.59690488, 0, 0.298990390, 0, -0.109705025])
+        for l in range(L+1):
+            self.f_B0.spectrum[l*Nr:(l+1)*Nr] = s_Plm[l]*s_T
+
+    def __call__(self, r, t):
+        B0_val = self.f_B0.eval_mesh(r.flatten(), t.flatten())
+        Bp = B0_val['p'][np.newaxis, ...]
+        Bt = B0_val['t'][np.newaxis, ...]
+        Br = B0_val['r'][np.newaxis, ...]
+        return Bp, Bt, Br
+
+
+class MagBG_SolarTd_Linear(AxisymVectorBG):
     """
     T2-Shell, linear profile
     """
