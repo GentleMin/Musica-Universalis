@@ -105,7 +105,7 @@ class MagBG_T2_Linear(AxisymVectorBG):
         self.Bo = Bo
     
     def __call__(self, r, t):
-        Bp = ((np.ones_like(r) - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi)*np.sin(2*t)
+        Bp = ((r - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi)*np.sin(2*t)
         Bt = np.zeros((1, t.size, r.size))
         Br = np.zeros((1, t.size, r.size))
         return Bp, Bt, Br
@@ -243,7 +243,7 @@ class MagBG_SolarTd_Linear(AxisymVectorBG):
         self.spec_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
     
     def __call__(self, r, t):
-        frad = (np.ones_like(r) - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi
+        frad = (r - self.Ri)/(self.Ro - self.Ri)*(self.Bo - self.Bi) + self.Bi
         fcla = (self.Plm_basis.op_dtheta(grid=t.flatten()) @ self.spec_Plm).reshape((1, t.size, 1))
         Bp = frad*fcla
         Bt = np.zeros((1, t.size, r.size))
