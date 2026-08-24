@@ -52,6 +52,13 @@ def get_solar_diff_rot(Omega0: float = 1.):
     return f_diff_rot
 
 
+def null_vector(r, t):
+    Bp = np.zeros((1, t.size, r.size))
+    Bt = np.zeros((1, t.size, r.size))
+    Br = np.zeros((1, t.size, r.size))
+    return Bp, Bt, Br
+
+
 def quiver_sphere(lon, lat, vx, vy, ax, vcap=1e-7):
     if np.max(np.abs(vx)**2 + np.abs(vy**2)) < vcap**2:
         return ax
@@ -83,7 +90,7 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
     u_surf = u(r=r_sect).evaluate()
     u_surf.change_scales(scales_view)
     zeta = d3.curl(u)
-    zeta = zeta(r=1).evaluate()
+    zeta = zeta(r=r_sect).evaluate()
     zeta.change_scales(scales_view)
 
     f_anchor = zeta['g'][2, 0, :, 0]
@@ -131,26 +138,26 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
     return coords, mhd_fields
 
 
-def calc_mhd_fields(model, v_view):
+def calc_mhd_fields(model, v_view, r_sect=1.):
 
     m_val = model.resolution[-1]
     for var in model.solver.state:
         var['c'] = 0
     model.subprob.subsystems[0].scatter(v_view, model.solver.state)
 
-    u = model.u
-    b = model.b
+    u = model.u.evaluate()
+    b = model.b.evaluate()
     dist = model.fields['dist']
     shell = model.fields['shell']
 
     # Surface fields
-    lon_view = np.linspace(-180, +180, num=100)
+    lon_view = np.linspace(-180, +180, num=500)
     scales_view = (1, 4, 1)
     _, t_view, _ = dist.local_grids(shell, scales=scales_view)
     t_view = t_view[0, :, 0]
     lat_view = np.degrees(np.pi/2 - t_view)
 
-    u_surf = u(r=1).evaluate()
+    u_surf = u(r=r_sect).evaluate()
     u_surf.change_scales(scales_view)
 
     up_anchor = u_surf['g'][0, 0, :, 0]
@@ -161,11 +168,11 @@ def calc_mhd_fields(model, v_view):
     u_surf_p = np.outer(u_surf['g'][0, 0, :, 0], phase)
     u_surf_t = np.outer(u_surf['g'][1, 0, :, 0], phase)
     zeta = d3.curl(u)
-    zeta = zeta(r=1).evaluate()
+    zeta = zeta(r=r_sect).evaluate()
     zeta.change_scales(scales_view)
     zeta_val = np.outer(zeta['g'][2, 0, :, 0], phase)
 
-    b_surf = b(r=1).evaluate()
+    b_surf = b(r=r_sect).evaluate()
     b_surf.change_scales(scales_view)
     b_surf_p = np.outer(b_surf['g'][0, 0, :, 0], phase)
     b_surf_t = np.outer(b_surf['g'][1, 0, :, 0], phase)
@@ -281,5 +288,71 @@ def main_DR_branch_Ro():
     plt.show()
 
 
+def main_MHD_DR():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-vector')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print(args)
+
+    v_view = np.load(args.input_vector)[:, 0]
+
+    ri, ro = 0.71, 1
+    D = ro - ri
+    ri /= D
+    ro /= D
+    model = evp_shell.ModelEVP_MHDDiffRShell_TorPol((ri, ro), args.res, B0_func=null_vector, U0_func=null_vector)
+    model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
+    
+    r_sect = 1.*ro
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(10, 6))
+
+    coords, fields = calc_mhd_fields(model, v_view, r_sect=r_sect)
+    norm = 1/np.abs(fields['u_t']).max()
+
+    fig.clear()
+    gs = fig.add_gridspec(2, ncol_proj+3)
+
+    ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+    ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    ax = fig.add_subplot(gs[1, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['b_surf_r'], ax)
+    ax.set_title(r'$b_r$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_r'], fig, gs[1,ncol_proj], title=r'$b_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_t'], fig, gs[1,ncol_proj+1], title=r'$b_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_p'], fig, gs[1,ncol_proj+2], title=r'$b_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    if args.output is not None:
+        plottings.figsave(fig, args.output, formats=('png',), dpi=200, overwrite=args.overwrite, bbox_inches='tight')
+    plt.show()
+
+
 if __name__ == '__main__':
-    main_DR_branch_Ro()
+    main_MHD_DR()

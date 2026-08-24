@@ -112,7 +112,13 @@ def main():
 
     args = parser.parse_args()
     timer = timers.ProcTimer(start=True)
-    timer.flag(loginfo=f'Calculating full spectrum of eigenvalue problem \n\t{args}', print_str=True, mode='0+', flush=True)
+    print("\n============================================================================================")
+    print("                     Calculating full spectrum of eigenvalue problem                        ")
+    print("                                  Direct eigensolve                                         ")
+    print("--------------------------------------------------------------------------------------------")
+    # print(args)
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}")
     
     spec_solver = full_gevp if args.gevp else full_eig
     M_lib = load_matrices(args.src)

@@ -81,7 +81,7 @@ def save_evs(src, dest, meta_mat, meta_ev):
 
 def combine_spectra(root_dirs, dest):
     for rootdir in root_dirs:
-        dir_list = os.listdir(rootdir)
+        dir_list = sorted(os.listdir(rootdir))
         print(rootdir)
         for matdir in dir_list:
             meta_mat = parse_matdir(matdir)
@@ -98,10 +98,10 @@ def combine_spectra(root_dirs, dest):
                 fpath = os.path.join(rootdir, matdir, evfile)
                 saved = save_evs(fpath, dest, meta_mat, meta_ev)
                 if saved:
-                    print(f'\r\t{evfile} saved to {dest}', flush=True, end='')
+                    print(f'\r\t{evfile} saved                   ', flush=True, end='')
                 else:
-                    print(f'\r\t{evfile} data already exist in {dest}', flush=True, end='')
-                time.sleep(0.05)
+                    print(f'\r\t{evfile} skipped (already exists)', flush=True, end='')
+                time.sleep(0.02)
             print()
 
 

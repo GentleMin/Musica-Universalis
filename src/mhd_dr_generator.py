@@ -22,6 +22,7 @@ def main_mhd_dr_setup():
     print("                                     Operator setup                                         ")
     print("--------------------------------------------------------------------------------------------")
     print(f"Parameters: {args}\n", flush=True)
+    os.makedirs(args.dir, exist_ok=True)
 
     ptimer = timers.ProcTimer(start=True)
     Ri, Ro = 0.71, 1.
@@ -30,7 +31,8 @@ def main_mhd_dr_setup():
     Ro /= D
     m, L, N = args.res[0], args.res[1], args.res[2]
 
-    B0 = bgs.MagBG_SolarTa()
+    # B0 = bgs.MagBG_SolarTa()
+    B0 = bgs.MagBG_T2_Linear(Ri, Ro, Bi=1, Bo=0.5)
     U0 = bgs.SolarDiffRot_SHT_LSQ(Ro, L=16, Nr=9)
     model_rmhd = evp_shell.ModelEVP_MHDDiffRShell_TorPol((Ri, Ro), (N, L, m), B0_func=B0, U0_func=U0)
     M_lib = model_rmhd.precomp_submat(set_problem=True,
@@ -38,7 +40,6 @@ def main_mhd_dr_setup():
         b_bc_i='perfect-conducting', b_bc_o='insulating')
     M_lib["perm"] = model_rmhd.subprob.pre_left
 
-    os.makedirs(args.dir, exist_ok=True)
     for key, mat in M_lib.items():
         sparse.save_npz(os.path.join(args.dir, key), mat)
     ptimer.flag(loginfo=f"Operators saved to {args.dir}", print_str=True, mode='0+', flush=True)
