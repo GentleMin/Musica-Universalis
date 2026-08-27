@@ -38,7 +38,7 @@ class MagBG_U(AxisymVectorBG):
 
 class MagBG_S1(AxisymVectorBG):
 
-    def __init__(self, Ri=0.35, Ro=1.0, *args, **kwargs):
+    def __init__(self, *args, Ri=0.35, Ro=1.0, **kwargs):
         self.Ri = Ri
         self.Ro = Ro
 
@@ -79,7 +79,7 @@ class MagBG_T2(AxisymVectorBG):
     T2-Shell, conforming to insulating BC @ arbitrary Ri, Ro
     """
 
-    def __init__(self, Ri=0.35, Ro=1.0, *args, **kwargs):
+    def __init__(self, *args, Ri=0.35, Ro=1.0, **kwargs):
         self.Ri = Ri
         self.Ro = Ro
 
@@ -97,7 +97,7 @@ class MagBG_T2_Linear(AxisymVectorBG):
     T2-Shell, linear profile
     """
 
-    def __init__(self, Ri=0.35, Ro=1.0, Bi=1, Bo=1, *args, **kwargs):
+    def __init__(self, *args, Ri=0.35, Ro=1.0, Bi=1, Bo=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.Ri = Ri
         self.Ro = Ro
@@ -116,7 +116,7 @@ class MagBG_T2_conductingIC(AxisymVectorBG):
     T2-Shell, conforming to insulating BC @ Ro and perfect conducting BC @ Ri
     """
 
-    def __init__(self, Ri=0.71, Ro=1.0, *args, **kwargs):
+    def __init__(self, *args, Ri=0.71, Ro=1.0, **kwargs):
         self.Ri = Ri
         self.Ro = Ro
         L_bg, N_bg = 2, 3
@@ -138,17 +138,18 @@ class MagBG_T2_conductingIC(AxisymVectorBG):
 
 class MagBG_SolarTa(AxisymVectorBG):
 
-    def __init__(self, *args, **kwargs):
-        self.Ri = 0.71/0.29
-        self.Ro = 1.00/0.29
+    def __init__(self, *args, Ro=1./0.29, **kwargs):
+        self.Ro = Ro
+        self.Ro_int = 1./0.29
 
     def __call__(self, r, t):
+        r_int = (self.Ro_int/self.Ro)*r
         frad = (
-            +757.564396 + r*(
-            -1390.500753 + r*(
-            +1019.975136 + r*(
-            -373.087646 + r*(
-            +68.0328443 + r*(-4.94813137)))))
+            +757.564396 + r_int*(
+            -1390.500753 + r_int*(
+            +1019.975136 + r_int*(
+            -373.087646 + r_int*(
+            +68.0328443 + r_int*(-4.94813137)))))
         )
         Plm_basis = qbasis.LegendrePlm(10, 0)
         spec_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.00389425606, 0, -0.00419644077, 0, +0.00100597563])
@@ -161,17 +162,18 @@ class MagBG_SolarTa(AxisymVectorBG):
 
 class MagBG_SolarTa_pro(AxisymVectorBG):
 
-    def __init__(self, *args, **kwargs):
-        self.Ri = 0.71/0.29
-        self.Ro = 1.00/0.29
+    def __init__(self, Ro=1./0.29, *args, **kwargs):
+        self.Ro = Ro
+        self.Ro_int = 1./0.29
 
     def __call__(self, r, t):
+        r_int = (self.Ro_int/self.Ro)*r
         frad = (
-            +757.564396 + r*(
-            -1390.500753 + r*(
-            +1019.975136 + r*(
-            -373.087646 + r*(
-            +68.0328443 + r*(-4.94813137)))))
+            +757.564396 + r_int*(
+            -1390.500753 + r_int*(
+            +1019.975136 + r_int*(
+            -373.087646 + r_int*(
+            +68.0328443 + r_int*(-4.94813137)))))
         )
         Plm_basis = qbasis.LegendrePlm(10, 0)
         spec_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
@@ -233,7 +235,7 @@ class MagBG_SolarTd_Linear(AxisymVectorBG):
     T2-Shell, linear profile
     """
 
-    def __init__(self, Ri=0.35, Ro=1.0, Bi=1, Bo=1, *args, **kwargs):
+    def __init__(self, *args, Ri=0.35, Ro=1.0, Bi=1, Bo=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.Ri = Ri
         self.Ro = Ro
