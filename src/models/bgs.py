@@ -27,6 +27,11 @@ class NullVector(AxisymVectorBG):
         return Bp, Bt, Br
 
 
+"""
+Background magnetic fields
+"""
+
+
 class MagBG_U(AxisymVectorBG):
 
     def __call__(self, r, t):
@@ -262,6 +267,11 @@ B0_Lib = {
 }
 
 
+"""
+Differential rotation profiles
+"""
+
+
 class SolarDiffRot_Grid(AxisymVectorBG):
     """
     Interpolation-based background flow due to differential rotation
@@ -412,4 +422,87 @@ class SolarDiffRot_SHT_LSQ(AxisymVectorBG):
         Ut = np.zeros((1, t.size, r.size))
         Ur = np.zeros((1, t.size, r.size))
         return Up, Ut, Ur
+
+
+"""
+Anelastic background density profiles
+"""
+
+
+class ScalarRProfile:
+
+    def __init__(self, *args, **kwds) -> None:
+        super().__init__()
+
+    def __call__(self, r):
+        raise NotImplementedError
+
+
+class Density_SCZ_Scale6(ScalarRProfile):
+    """
+    Density profile for the solar convection zone with 6.0 density scale heights in 0.71R < r < R, 
+    polynomial fit within 0.71 to 1 outer sphere radius with a priority to fit inner region
+    """
+
+    def __init__(self, *args, Ro=1.0, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        super().__init__(*args, **kwds)
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        r_ptb = r_int - 0.71
+        rho = (
+            1. + r_ptb*(
+            7. + r_ptb**2*(
+            500. + r_ptb**2*(
+            700. + r_ptb**2*(
+            1.0e+5 + r_ptb**3*(
+            1.0e+7 + r_ptb**10*(
+            1.0e+13 + r_ptb**30*(1.0e+30)))))))
+        )
+        return rho
+
+
+class Density_SCZ_Scale7_5(ScalarRProfile):
+    """
+    Density profile for the solar convection zone with 7.5 density scale heights in 0.71R < r < R, 
+    polynomial fit within 0.71 to 1 outer sphere radius with a priority to fit inner region
+    """
+
+    def __init__(self, *args, Ro=1.0, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        super().__init__(*args, **kwds)
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        r_ptb = r_int - 0.71
+        rho = (
+            1. + r_ptb*(
+            7. + r_ptb**2*(
+            5.0e+2 + r_ptb**2*(
+            7.0e+2 + r_ptb**2*(
+            1.0e+5 + r_ptb**3*(
+            1.0e+7 + r_ptb**10*(
+            1.0e+13 + r_ptb**30*(1.0795e+30)))))))
+        )
+        return rho
+
+
+class LinearProfile(ScalarRProfile):
+    """
+    Scalar profile varying linearly between Ri and Ro
+    """
+
+    def __init__(self, *args, Ri=0.35, Ro=1.0, fi=1.0, fo=1.0, **kwds) -> None:
+        self.Ri = Ri
+        self.Ro = Ro
+        self.fi = fi
+        self.fo = fo
+        super().__init__(*args, **kwds)
+
+    def __call__(self, r):
+        f_vals = (r - self.Ri)/(self.Ro - self.Ri)*(self.fo - self.fi) + self.fi
+        return f_vals
 
