@@ -438,10 +438,37 @@ class ScalarRProfile:
         raise NotImplementedError
 
 
-class Density_SCZ_Scale6(ScalarRProfile):
+class rDensity_SCZ_N18_Scale5_5(ScalarRProfile):
     """
-    Density profile for the solar convection zone with 6.0 density scale heights in 0.71R < r < R, 
-    polynomial fit within 0.71 to 1 outer sphere radius with a priority to fit inner region
+    Reciprocal density profile for the solar convection zone
+    with 5.5 density scale heights in 0.71R < r < R, 
+    polynomial fit within 0.71 to 1 outer sphere radius prioritizing inner region
+    """
+
+    def __init__(self, *args, Ro=1.0, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        super().__init__(*args, **kwds)
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        r_ptb = r_int - 0.71
+        rho = (
+            1. + r_ptb*(
+            7. + r_ptb**2*(
+            500. + r_ptb**2*(
+            700. + r_ptb**2*(
+            1.0e+5 + r_ptb**3*(
+            1.0e+7 + r_ptb**8*(7.7e+11))))))
+        )
+        return rho
+
+
+class rDensity_SCZ_Scale6(ScalarRProfile):
+    """
+    Reciprocal density profile for the solar convection zone
+    with 6.0 density scale heights in 0.71R < r < R, 
+    polynomial fit within 0.71 to 1 outer sphere radius prioritizing inner region
     """
 
     def __init__(self, *args, Ro=1.0, **kwds) -> None:
@@ -464,10 +491,11 @@ class Density_SCZ_Scale6(ScalarRProfile):
         return rho
 
 
-class Density_SCZ_Scale7_5(ScalarRProfile):
+class rDensity_SCZ_Scale7_5(ScalarRProfile):
     """
-    Density profile for the solar convection zone with 7.5 density scale heights in 0.71R < r < R, 
-    polynomial fit within 0.71 to 1 outer sphere radius with a priority to fit inner region
+    Reciprocal density profile for the solar convection zone 
+    with 7.5 density scale heights in 0.71R < r < R, 
+    polynomial fit within 0.71 to 1 outer sphere radius prioritizing inner region
     """
 
     def __init__(self, *args, Ro=1.0, **kwds) -> None:
