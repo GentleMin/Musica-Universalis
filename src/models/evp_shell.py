@@ -2572,7 +2572,7 @@ class ModelEVP_AnelasticMDRShell_TorPol:
 
         coords = d3.SphericalCoordinates('phi', 'theta', 'r')
         dist = d3.Distributor(coords, dtype=cls.dtype)
-        shell = d3.ShellBasis(coords, shape=(Np, Nt, Nr), radii=(Ri, Ro), dtype=cls.dtype)
+        shell = d3.ShellBasis(coords, shape=(Np, Nt, Nr), radii=(Ri, Ro), dtype=cls.dtype, dealias=(1, 3/2, 3/2))
         sphere = shell.outer_surface
         p_grid, t_grid, r_grid = dist.local_grids(shell)
 
