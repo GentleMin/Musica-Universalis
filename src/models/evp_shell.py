@@ -2419,7 +2419,7 @@ class ModelEVP_AnelasticMDRShell:
         # Equations
         problem.add_equation(
             "s*u + 2*cross(ez, u) + Ro_r*(U0 @ grad(u) + u @ grad(U0))"
-            "- Le*(-cross(lap(A), B0) + cross(curl(B0), b))"
+            "- Le*irho0*(-cross(lap(A), B0) + cross(curl(B0), b))"
             "- Ek*irho0*div(rho0*Eps_tau) + grad(p) + lift(tau_u2) = 0"
         )
         problem.add_equation("div(rho0*u) + tau_p = 0")
@@ -2680,13 +2680,13 @@ class ModelEVP_AnelasticMDRShell_TorPol:
         problem.add_equation(
             "r_Curl(s*u + 2*cross(ez, u) + Ro_r*(U0 @ grad(u) + u @ grad(U0)))"
             "- Ek*r_Curl(irho0*div(rho0*Eps))"
-            "- Le*r_Curl(cross(curl(b), B0) + cross(curl(B0), b))"
+            "- Le*r_Curl(irho0*(cross(curl(b), B0) + cross(curl(B0), b)))"
             "+ div(rvec*lift_u(tau_Pt1)) + lift_u(tau_Pt2) + tau_tu = 0"
         )
         problem.add_equation(
             "r_Curl2(s*u + 2*cross(ez, u) + Ro_r*(U0 @ grad(u) + u @ grad(U0)))"
             "- Ek*r_Curl(curl(irho0*div(rho0*Eps)))"
-            "- Le*r_Curl2(cross(curl(b), B0) + cross(curl(B0), b))"
+            "- Le*r_Curl2(irho0*(cross(curl(b), B0) + cross(curl(B0), b)))"
             "+ div(grad(div(rvec*lift_u(tau_Pp1)) + lift_u(tau_Pp2)) + rvec*lift_u(tau_Pp3)) + lift_u(tau_Pp4) + tau_pu = 0"
         )
         problem.add_equation(
