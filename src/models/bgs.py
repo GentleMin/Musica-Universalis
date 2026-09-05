@@ -489,6 +489,33 @@ class rDensity_SCZ_Scale6(ScalarRProfile):
             1.0e+13 + r_ptb**30*(1.0e+30)))))))
         )
         return rho
+    
+
+class rDensity_SCZ_N24_Scale6_5(ScalarRProfile):
+    """
+    Reciprocal density profile for the solar convection zone
+    with 6.5 density scale heights in 0.71R < r < R (rho(0.71R) = 650 rho(R)), 
+    polynomial fit within 0.71 to 1 outer sphere radius prioritizing inner region,
+    maximum relative error 20% within 0.71R < r < 0.985R (rho(0.71R) = 205 rho(0.985R))
+    """
+
+    def __init__(self, *args, Ro=1.0, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        super().__init__(*args, **kwds)
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        r_ptb = r_int - 0.71
+        rho = (
+            1. + r_ptb*(
+            7. + r_ptb**2*(
+            500. + r_ptb**2*(
+            700. + r_ptb**2*(
+            1.0e+5 + r_ptb**3*(
+            1.0e+7 + r_ptb**14*(4.48e+15))))))
+        )
+        return rho
 
 
 class rDensity_SCZ_Scale7_5(ScalarRProfile):
