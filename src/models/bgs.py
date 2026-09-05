@@ -235,7 +235,7 @@ class MagBG_SolarTa_bimodal_varNBC(AxisymVectorBG):
         return Bp, Bt, Br
 
 
-class MagBG_SolarTd_Linear(AxisymVectorBG):
+class MagBG_SolarTa_Linear(AxisymVectorBG):
     """
     T2-Shell, linear profile
     """
@@ -255,6 +255,60 @@ class MagBG_SolarTd_Linear(AxisymVectorBG):
         Bp = frad*fcla
         Bt = np.zeros((1, t.size, r.size))
         Br = np.zeros((1, t.size, r.size))
+        return Bp, Bt, Br
+
+
+class MagBG_SolarTa_FastDecay(AxisymVectorBG):
+    """
+    SolarTa toroidal field (angular) x Fast-decaying radial profile
+    """
+
+    def __init__(self, Ri, Ro, *args, **kwargs):
+        self.Ri = Ri
+        self.Ro = Ro
+
+        L, Nr = 10, 6
+        Plm_basis = qbasis.LegendrePlm(L, 0)
+        T_basis = qbasis.ChebyshevT(Nr, interval=(Ri, Ro))
+        self.f_B0 = qfield.ShellTorPol_m(T_basis, Plm_basis, 'tor', dtype=np.float64)
+        s_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
+        s_T = np.array([0.97091952, -0.49407104,  0.07285458,  0.00857464, -0.05667983, -0.01613811])
+        for l in range(L+1):
+            self.f_B0.spectrum[l*Nr:(l+1)*Nr] = s_Plm[l]*s_T
+
+    def __call__(self, r, t):
+        B0_val = self.f_B0.eval_mesh(r.flatten(), t.flatten())
+        Bp = B0_val['p'][np.newaxis, ...]
+        Bt = B0_val['t'][np.newaxis, ...]
+        Br = B0_val['r'][np.newaxis, ...]
+        return Bp, Bt, Br
+
+
+class MagBG_SolarTa_iPCoI(AxisymVectorBG):
+    """
+    SolarTa toroidal field (angular) x lowest-degree Galerkin basis satisfying
+        inner Perfectly Conducting (iPC) condition, &
+        outer Insulating (oI) condition
+    """
+
+    def __init__(self, Ri, Ro, *args, **kwargs):
+        self.Ri = Ri
+        self.Ro = Ro
+
+        L, Nr = 10, 3
+        Plm_basis = qbasis.LegendrePlm(L, 0)
+        T_basis = qbasis.ChebyshevT(Nr, interval=(Ri, Ro))
+        self.f_B0 = qfield.ShellTorPol_m(T_basis, Plm_basis, 'tor', dtype=np.float64)
+        s_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
+        s_T = np.array([1.14788732, -0.5, -0.07394366])
+        for l in range(L+1):
+            self.f_B0.spectrum[l*Nr:(l+1)*Nr] = s_Plm[l]*s_T
+
+    def __call__(self, r, t):
+        B0_val = self.f_B0.eval_mesh(r.flatten(), t.flatten())
+        Bp = B0_val['p'][np.newaxis, ...]
+        Bt = B0_val['t'][np.newaxis, ...]
+        Br = B0_val['r'][np.newaxis, ...]
         return Bp, Bt, Br
 
 
