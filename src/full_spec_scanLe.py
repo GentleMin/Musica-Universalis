@@ -113,7 +113,8 @@ def main():
 
     args = parser.parse_args()
     # Le_list = np.r_[0., np.logspace(-3, -2, num=5)[:-1], np.logspace(-2, -0.5, num=15)]
-    Le_list = np.r_[0, 0.005, 0.01, np.arange(0.02, 0.21, step=0.02)]
+    # Le_list = np.r_[0, 0.005, 0.01, np.arange(0.02, 0.21, step=0.02)]
+    Le_list = np.arange(0.022, 0.04, step=0.002)
     timer = timers.ProcTimer(start=True)
     print("\n============================================================================================")
     print("                     Calculating full spectrum of eigenvalue problem                        ")

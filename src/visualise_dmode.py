@@ -8,8 +8,11 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 from scipy import interpolate
 from scipy.sparse import linalg as spla
-from models import evp_shell
-from utils import plottings, eigs
+# from models import evp_shell
+# from utils import plottings, eigs
+from src.models import evp_shell, bgs
+from src.utils import plottings, eigs
+
 cwd = os.getcwd()
 
 
@@ -301,9 +304,9 @@ def main_MHD_DR():
     v_view = np.load(args.input_vector)[:, 0]
 
     ri, ro = 0.71, 1
-    D = ro - ri
-    ri /= D
-    ro /= D
+    # D = ro - ri
+    # ri /= D
+    # ro /= D
     model = evp_shell.ModelEVP_MHDDiffRShell_TorPol((ri, ro), args.res, B0_func=null_vector, U0_func=null_vector)
     model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
     
@@ -354,5 +357,75 @@ def main_MHD_DR():
     plt.show()
 
 
+def main_Anelastic_MDR():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-vector')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print(args)
+
+    v_view = np.load(args.input_vector)[:, 0]
+
+    ri, ro = 0.71, 1
+    # D = ro - ri
+    # ri /= D
+    # ro /= D
+
+    irho0 = bgs.rDensity_SCZ_N24_Scale6_5(Ro=ro)
+    model = evp_shell.ModelEVP_AnelasticMDRShell_TorPol((ri, 0.985*ro), args.res, 
+        B0_func=null_vector, U0_func=null_vector, irho0_func=irho0)
+    model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
+    
+    r_sect = 1.*ro
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(10, 6))
+
+    coords, fields = calc_mhd_fields(model, v_view, r_sect=r_sect)
+    norm = 1/np.abs(fields['u_t']).max()
+
+    fig.clear()
+    gs = fig.add_gridspec(2, ncol_proj+3)
+
+    ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+    ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    ax = fig.add_subplot(gs[1, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['b_surf_r'], ax)
+    ax.set_title(r'$b_r$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_r'], fig, gs[1,ncol_proj], title=r'$b_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_t'], fig, gs[1,ncol_proj+1], title=r'$b_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_p'], fig, gs[1,ncol_proj+2], title=r'$b_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    if args.output is not None:
+        plottings.figsave(fig, args.output, formats=('png',), dpi=200, overwrite=args.overwrite, bbox_inches='tight')
+    plt.show()
+
+
+
 if __name__ == '__main__':
-    main_MHD_DR()
+    main_Anelastic_MDR()

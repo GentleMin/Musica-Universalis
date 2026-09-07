@@ -151,8 +151,10 @@ def main():
 
     timer.flag(loginfo=f'Eigensolver starts...', print_str=True, mode='0+', flush=True)
     w = spec_solver(A, B)
-    np.save(fname + '.npy', w)
-    timer.flag(loginfo=f'Spectrum solved successfully! Results saved to {fname}.npy', print_str=True, mode='0+', flush=True)
+    # np.save(fname + '.npy', w)
+    # timer.flag(loginfo=f'Spectrum solved successfully! Results saved to {fname}.npy', print_str=True, mode='0+', flush=True)
+    timer.flag(loginfo=f'Spectrum solved successfully!', print_str=True, mode='0+', flush=True)
+
 
 
 if __name__ == '__main__':
