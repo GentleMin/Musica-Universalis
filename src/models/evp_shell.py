@@ -305,8 +305,8 @@ class ModelEVP_RShell_TorPol:
         M_Ek0 = chop_sparse(M_Ek1 - dM_Ek, thresh=1e-10)
 
         M_lib = {
-            'K_0': K_Ek0, 'M_0': M_Ek0,
-            'dK_Ek': dK_Ek, 'dM_Ek': dM_Ek
+            'coriolis': K_Ek0, 'mass': M_Ek0,
+            'viscous_diffusion': dK_Ek
         }
         return M_lib
 
