@@ -181,13 +181,6 @@ class ModelEVP_RShell_TorPol:
         s = dist.Field(name='s')
         Tor = dist.Field(name='T', bases=shell)
         Pol = dist.Field(name='P', bases=shell)
-        # tau_u1 = dist.VectorField(coords, name='tau_u1', bases=sphere)
-        # tau_u2 = dist.VectorField(coords, name='tau_u2', bases=sphere)
-        # tau_pr = dist.Field(name='tau_pr', bases=sphere)
-        # tau_curl1 = dist.Field(name='tau_curl1', bases=sphere)
-        # tau_curl2 = dist.Field(name='tau_curl2', bases=sphere)
-        # tau_t = dist.Field(name='tau_t')
-        # tau_p = dist.Field(name='tau_p')
 
         tau_Pt1 = dist.Field(name='tau_Pt1', bases=sphere)
         tau_Pt2 = dist.Field(name='tau_Pt2', bases=sphere)
@@ -214,11 +207,8 @@ class ModelEVP_RShell_TorPol:
 
         state_var = [
             Tor, Pol,
-            # tau_u1, tau_pr, tau_curl1, tau_curl2,
             tau_Pt1, tau_Pt2, tau_Pp1, tau_Pp2, tau_Pp3, tau_Pp4, 
-            # tau_Vt1, tau_Vt2, tau_Vp1, tau_Vp2,
             tau_tu, tau_pu, 
-            # tau_tb, tau_pb
         ]
 
         return locals()
@@ -228,33 +218,7 @@ class ModelEVP_RShell_TorPol:
         bc: Literal['no-slip', 'stress-free'] = 'no-slip') -> d3.EigenvalueProblem:
 
         s = fields_namespace['s']
-        # u = fields_namespace['u']
-        # Tor = fields_namespace['Tor']
-        # Pol = fields_namespace['Pol']
-        # ez = fields_namespace['ez']
-        # rvec = fields_namespace['rvec']
-        # tau_u1 = fields_namespace['tau_u1']
-        # # tau_u2 = fields_namespace['tau_u2']
-        # tau_pr = fields_namespace['tau_pr']
-        # tau_curl1 = fields_namespace['tau_curl1']
-        # tau_curl2 = fields_namespace['tau_curl2']
-        # tau_t = fields_namespace['tau_t']
-        # tau_p = fields_namespace['tau_p']
-        # lift_u = fields_namespace['lift_u']
-        # lift_t = fields_namespace['lift_t']
-
-        # # Equations
-        # eq_NS = s*u + 2*d3.cross(ez, u) - Ek*d3.div(d3.grad(u) + rvec*lift_u(tau_u1)) + rvec*lift_t(tau_pr)
-        # curl1_eq_NS = d3.curl(eq_NS) + rvec*lift_u(tau_curl1)
-        # curl2_eq_NS = d3.curl(curl1_eq_NS) + rvec*lift_t(tau_curl2)
-
-        # fine_namespace = fields_namespace | {'Ek': Ek, 'eq_NS': eq_NS, 'curl1_eq_NS': curl1_eq_NS, 'curl2_eq_NS': curl2_eq_NS}
         fine_namespace = fields_namespace | {'Ek': Ek}
-
-        # problem = d3.EVP([Tor, Pol, tau_u1, tau_pr, tau_curl1, tau_curl2, tau_t, tau_p], eigenvalue=s, namespace=fine_namespace)
-        # # problem = d3.EVP([Tor, Pol, tau_u1, tau_u2, tau_t, tau_p], eigenvalue=s, namespace=fine_namespace)
-        # problem.add_equation("dot(er, curl1_eq_NS) + tau_t = 0")
-        # problem.add_equation("dot(er, curl2_eq_NS) + tau_p = 0")
 
         problem = d3.EVP(
             fields_namespace['state_var'], 
@@ -270,27 +234,18 @@ class ModelEVP_RShell_TorPol:
             "+ r_Curl2(2*cross(ez, u)) + tau_pu = 0"
         )
 
-        # Boundary conditions
-        # if bc == 'no-slip':
-        #     problem.add_equation("u(r=Ri) = 0")
-        #     problem.add_equation("u(r=Ro) = 0")
-        # if bc == 'stress-free':
-        #     problem.add_equation("radial(u(r=Ri)) = 0")
-        #     problem.add_equation("radial(u(r=Ro)) = 0")
-        #     problem.add_equation("angular(radial(strain_rate(r=Ri), 0), 0) = 0")
-        #     problem.add_equation("angular(radial(strain_rate(r=Ro), 0), 0) = 0")
-        problem.add_equation("Pol(r=Ri) = 0")
-        problem.add_equation("Pol(r=Ro) = 0")
         if bc == 'no-slip':
-            problem.add_equation("radial(grad(Pol)(r=Ri)) = 0")
-            problem.add_equation("radial(grad(Pol)(r=Ro)) = 0")
             problem.add_equation("Tor(r=Ri) = 0")
             problem.add_equation("Tor(r=Ro) = 0")
+            problem.add_equation("radial(grad(Pol)(r=Ri)) = 0")
+            problem.add_equation("radial(grad(Pol)(r=Ro)) = 0")
         elif bc == 'stress-free':
-            problem.add_equation("radial(radial(grad(grad(Pol))(r=Ri))) = 0")
-            problem.add_equation("radial(radial(grad(grad(Pol))(r=Ro))) = 0")
             problem.add_equation("radial(grad(Tor)(r=Ri)) - Tor(r=Ri)/Ri = 0")
             problem.add_equation("radial(grad(Tor)(r=Ro)) - Tor(r=Ro)/Ro = 0")
+            problem.add_equation("radial(radial(grad(grad(Pol))(r=Ri))) = 0")
+            problem.add_equation("radial(radial(grad(grad(Pol))(r=Ro))) = 0")
+        problem.add_equation("Pol(r=Ri) = 0")
+        problem.add_equation("Pol(r=Ro) = 0")
         
         # Gauge conditions
         problem.add_equation("integ(Tor) = 0")
@@ -314,6 +269,13 @@ class ModelEVP_RShell_TorPol:
         cls_name = self.__class__.__name__
         o_str = f'<{cls_name} geom={self.geometry} res={self.resolution}>'
         return o_str
+    
+    def setup_model(self, **params_problem):
+
+        m = self.resolution[-1]
+        self.problem = self.setup_problem(1, self.fields, **params_problem)
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.subprob = self.solver.subproblems_by_group[(m, None, None)]
     
     def setup_eigenmat(self, Ek, set_problem: bool = True, **params_problem):
 
