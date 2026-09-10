@@ -614,4 +614,46 @@ class LinearProfile(ScalarRProfile):
     def __call__(self, r):
         f_vals = (r - self.Ri)/(self.Ro - self.Ri)*(self.fo - self.fi) + self.fi
         return f_vals
+    
+
+class Density_SCZ_M25Interp(ScalarRProfile):
+    """
+    Density profile based on linear interpolation of the profile used in Mukhopadyay+ 2025
+    """
+    default_bg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "background.npz")
+
+    def __init__(self, *args, Ro=1.0, path_bg=None, norm=None, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        self.path_bg = self.default_bg_path if path_bg is None else path_bg
+        bg = np.load(self.path_bg)
+        r_grid = bg['R']
+        rho_grid = bg['rho0']
+        self.f_rho = interpolate.interp1d(r_grid, rho_grid)
+        self.norm = self.f_rho(0.71) if norm is None else norm
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        return self.f_rho(r_int)/self.norm
+
+
+class rDensity_SCZ_M25Interp(ScalarRProfile):
+    """
+    inverse Density profile based on linear interpolation of the profile used in Mukhopadyay+ 2025
+    """
+    default_bg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "background.npz")
+
+    def __init__(self, *args, Ro=1.0, path_bg=None, norm=None, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        self.path_bg = self.default_bg_path if path_bg is None else path_bg
+        bg = np.load(self.path_bg)
+        r_grid = bg['R']
+        rho_grid = bg['rho0']
+        self.f_rho = interpolate.interp1d(r_grid, rho_grid)
+        self.norm = self.f_rho(0.71) if norm is None else norm
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        return self.norm/self.f_rho(r_int)
 

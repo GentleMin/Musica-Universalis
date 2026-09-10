@@ -107,8 +107,20 @@ def gen_path_hydro(meta):
     return path_base, path_cmp
 
 
-def gen_label_hydro(meta):
+def gen_path_hydro_cst_res(meta):
+    g_path = f"Ro{meta['Ro']:.2f}/Ek{meta['Ek']:.2e}/m{meta['m']:02d}/sym_{meta['symm']}"
+    path_base = f"{g_path}/{meta['res'][1]}x{meta['res'][0]}"
+    path_cmp = f"{g_path}/{meta['res_cmp'][1]}x{meta['res_cmp'][0]}"
+    return path_base, path_cmp
+
+
+def gen_label_hydro_Ek(meta):
     label = f"m={meta['m']}, Ek={meta['Ek']:.2e}"
+    return label
+
+
+def gen_label_hydro_Ro(meta):
+    label = f"m={meta['m']}, Ro={meta['Ro']:.2e}"
     return label
 
 
