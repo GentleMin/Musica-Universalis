@@ -36,9 +36,8 @@ def full_eig(K, M):
     K = sparse.csc_array(K)
     M = sparse.csc_array(M)
     KiM = spla.spsolve(K, M).toarray()
-    # print(KiM.nbytes)
-    # w, _ = linalg.eig(KiM.toarray())
-    w = np.linalg.eigvals(KiM)
+    print("Sparse matrix solve complete... Converted to Ordinary Eigenvalue Problem.", flush=True)
+    w = linalg.eigvals(KiM, overwrite_a=True)
     w = 1./w
 
     i = np.isfinite(w) & (np.abs(w) < 1e+10) & (np.abs(w) > 1e-10)

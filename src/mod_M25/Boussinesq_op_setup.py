@@ -2,8 +2,7 @@ import os, argparse, time
 import numpy as np
 import dedalus.public as d3
 import logging
-from scipy import interpolate, sparse, linalg
-from scipy.sparse import linalg as spla
+from scipy import interpolate, sparse
 from scipy.interpolate import interp1d
 import argparse
 
@@ -18,11 +17,15 @@ parser.add_argument('m', type=int, help="""
         """)
 parser.add_argument('-res', type=int, nargs=2, default=[32, 24])
 parser.add_argument('-Ro', type=float, default=1.0)
+parser.add_argument('-o', '--out-dir')
 args = parser.parse_args()
 print(args)
 
 #loading background from Standard model S
-V=np.load('data/background.npz')
+path_bg = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data/background.npz")
+path_dr = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data/diff_rot.npz")
+
+V=np.load(path_bg)
 rs=V['R']
 cs=V['cs']
 rho0=V['rho0']
@@ -44,7 +47,7 @@ Nphi = 2*(args.m + 1)
 # Nr = 24
 # Ntheta = args.m + args.res[0]
 # Nr = args.res[1]
-Ntheta = 100
+Ntheta = 84
 Nr = 24
 Ri = 0.71
 Ro = 0.985
@@ -64,7 +67,8 @@ Re = Om_sun*(R_sun)**2/Turbulent_viscosity
 Pe = Re*Prandtl
 Om0 = 456
 del_r=0
-dir_name= 'results/Boussinesq_solarDR_benchmark'
+# dir_name= 'results/Boussinesq_solarDR_benchmark'
+dir_name=args.out_dir
 
 os.makedirs(dir_name, exist_ok = True) 
 
@@ -98,7 +102,7 @@ for i in range(3):
 
 
 # Substitutions
-dt = lambda A: -1j*om*A
+dt = lambda A: om*A
 rvec = dist.VectorField(coords, bases=shell.meridional_basis)
 rvec['g'][2] = r
 ez = dist.VectorField(coords, bases=shell.meridional_basis)
@@ -124,7 +128,7 @@ p0['g'] = fp0(r.reshape(r.size))/fp0(Ri)
 
 Ome=dist.Field(bases=shell.meridional_basis)
 Ome['g']=0
-diff_rot_data = np.load('data/diff_rot.npz')
+diff_rot_data = np.load(path_dr)
 diff_rot = diff_rot_data['ome']
 rs= diff_rot_data['r']
 thetas = diff_rot_data['theta']
@@ -143,7 +147,7 @@ nu = dist.Field(bases=shell.meridional_basis)
 nu['g'] =  1                                     
 S = (d3.grad(u) + d3.transpose(d3.grad(u))+ rvec*lift(tau_u1))
 grad_s0 = dist.VectorField(coords, bases=shell.meridional_basis)
-diff_rot_data = np.load('data/diff_rot.npz')
+diff_rot_data = np.load(path_dr)
 del_th = diff_rot_data['dsdt']
 
 rs= diff_rot_data['r']
@@ -204,7 +208,7 @@ L_DR = L_2 - L_1
 L_0 = L_1 - L_DR
 
 if __name__ == "__main__":
-    mat_dir = f"{dir_name}/Mat-r{Ro:.3f}_{args.m}x{Ntheta}x{Nr}/ops"
+    mat_dir = f"{dir_name}/Mat_{args.m}x{Nr}x{Ntheta}/ops"
     os.makedirs(mat_dir, exist_ok=True)
     sparse.save_npz(f"{mat_dir}/mass", M)
     sparse.save_npz(f"{mat_dir}/coriolis", L_0)

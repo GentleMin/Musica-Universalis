@@ -3,6 +3,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def figsave(fig, file, formats=('png',), overwrite=False, **kwargs):
+    if file is None:
+        return False
+    saved = False
+    for fmt in formats:
+        fname = file + '.' + fmt
+        if os.path.exists(fname) and (not overwrite):
+            warnings.warn(f'Skipping {fname} ... File exists!')
+            continue
+        fig.savefig(fname, **kwargs)
+        saved = True
+    return saved
+
+
 def main():
 
     parser = argparse.ArgumentParser()
@@ -64,7 +78,7 @@ def main():
             colors='silver', linestyles='--', zorder=4)
     
     ax.legend(loc=3)
-    # figsave(fig, os.path.join(bench_dir, 'spec-QD_m2_Le1.0e-03_Lu1.0e+01_Pm1_stress-free_mc'))
+    figsave(fig, os.path.join('out', 'spec_m3_Ek1e-4_stress-free'), formats=('jpg',), dpi=200)
     plt.show()
 
 
