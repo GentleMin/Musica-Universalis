@@ -24,6 +24,11 @@ def cst_profile(r):
     return f_vals
 
 
+def zero_profile(r):
+    f_vals = np.zeros_like(r)
+    return f_vals
+
+
 class ReciprocScalarFunc:
 
     def __init__(self, func: Callable):
@@ -2061,6 +2066,13 @@ class ModelEVP_DiffRShell_TorPol:
             self.solver = solver
         
         return K, M
+
+    def setup_model(self, **params_problem):
+
+        m = self.resolution[-1]
+        self.problem = self.setup_problem(1, 1, self.fields, **params_problem)
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.subprob = self.solver.subproblems_by_group[(m, None, None)]
     
     def precomp_submat(self, set_problem: bool = True, **params_problem):
         
@@ -2807,5 +2819,395 @@ class ModelEVP_AnelasticMDRShell_TorPol:
             'viscous_diffusion': K_vis, 
             'magnetic_diffusion': K_eta,
             'differential_rotation': K_vel, 
+        }
+        return M_lib
+
+
+class ModelEVP_SCZ_AMADR_TorPol:
+    """
+    Eigenvalue problem model for [S]olar [C]onvection [Z]one, 
+        [A]nelastic, [M]agnetohydrodynamic, [A]rchimedes model with [D]ifferential [R]otation,
+        solenoidal vector fields expressed in [T]oroidal-[P]oloidal representation
+    """
+
+    dtype = np.complex128
+
+    @classmethod
+    def setup_fields(cls, geometry: tuple[float, float], resolution: tuple[int, int, int], 
+        B0_func: Callable = V0_axisym, U0_func: Callable = V0_axisym, 
+        rho0_func: Callable = cst_profile, inv_rho0_func: Callable = cst_profile,
+        g0_func: Callable = cst_profile, T0_func: Callable = cst_profile, iHp_func: Callable = zero_profile,
+    ) -> dict:
+
+        Ri, Ro = geometry
+        Nr, Nt, m = resolution
+        Np = 2*(m + 1)
+
+        coords = d3.SphericalCoordinates('phi', 'theta', 'r')
+        dist = d3.Distributor(coords, dtype=cls.dtype)
+        shell = d3.ShellBasis(coords, shape=(Np, Nt, Nr), radii=(Ri, Ro), dtype=cls.dtype, dealias=(1, 3/2, 3/2))
+        sphere = shell.outer_surface
+        p_grid, t_grid, r_grid = dist.local_grids(shell)
+
+        rvec = dist.VectorField(coords, bases=shell.meridional_basis)
+        rvec['g'][2] = r_grid
+        er = dist.VectorField(coords, bases=shell.meridional_basis)
+        er['g'][2] = 1.
+        et = dist.VectorField(coords, bases=shell.meridional_basis)
+        et['g'][1] = 1.
+        et_sin = dist.VectorField(coords, bases=shell.meridional_basis)
+        et_sin['g'][1] = np.sin(t_grid)
+        ez = dist.VectorField(coords, bases=shell.meridional_basis)
+        ez['g'][1] = - np.sin(t_grid)
+        ez['g'][2] = + np.cos(t_grid)
+        Id_op = d3.Field(dist=dist, bases=(shell.meridional_basis, shell.meridional_basis), tensorsig=(coords, coords))
+        for i in range(3):
+            Id_op['g'][i,i] = 1.
+        rmul = dist.Field(name='rmul', bases=shell.meridional_basis)
+        rmul['g'] = r_grid
+
+        # Density profile
+        rho0 = dist.Field(name='rho0', bases=shell.meridional_basis)
+        rho0['g'] = rho0_func(r_grid)
+        irho0 = dist.Field(name='irho0', bases=shell.meridional_basis)
+        irho0['g'] = inv_rho0_func(r_grid)
+
+        # Gravitational acceleration profile
+        g0 = dist.Field(name='g0', bases=shell.meridional_basis)
+        g0['g'] = g0_func(r_grid)
+        ig0 = dist.Field(name='ig0', bases=shell.meridional_basis)
+        ig0['g'] = 1/g0_func(r_grid)
+
+        # Temperature profile
+        T0 = dist.Field(name='T0', bases=shell.meridional_basis)
+        T0['g'] = T0_func(r_grid)
+        iT0 = dist.Field(name='iT0', bases=shell.meridional_basis)
+        iT0['g'] = 1/T0_func(r_grid)
+
+        # Pressure scale height profile
+        iHp = dist.Field(name='iHp', bases=shell.meridional_basis)
+        iHp['g'] = iHp_func(r_grid)
+
+        # Main fields
+        lamb = dist.Field(name='lamb')
+        Tu = dist.Field(name='Tu', bases=shell)
+        Pu = dist.Field(name='Pu', bases=shell)
+        Tb = dist.Field(name='Tb', bases=shell)
+        Pb = dist.Field(name='Pb', bases=shell)
+        q = d3.curl(Tu*rvec) + d3.curl(d3.curl(Pu*rvec))
+        b = d3.curl(Tb*rvec) + d3.curl(d3.curl(Pb*rvec))
+        u = irho0*q
+        S = dist.Field(name='S', bases=shell)
+
+        # Kinetic tau variables
+        tau_Pt1 = dist.Field(name='tau_Pt1', bases=sphere)
+        tau_Pt2 = dist.Field(name='tau_Pt2', bases=sphere)
+        tau_Pp1 = dist.Field(name='tau_Pp1', bases=sphere)
+        tau_Pp2 = dist.Field(name='tau_Pp2', bases=sphere)
+        tau_Pp3 = dist.Field(name='tau_Pp3', bases=sphere)
+        tau_Pp4 = dist.Field(name='tau_Pp4', bases=sphere)
+        tau_tu = dist.Field(name='tau_tu')
+        tau_pu = dist.Field(name='tau_pu')
+
+        # Magnetic tau variables
+        tau_Vt1 = dist.Field(name='tau_Vt1', bases=sphere)
+        tau_Vt2 = dist.Field(name='tau_Vt2', bases=sphere)
+        tau_Vp1 = dist.Field(name='tau_Vp1', bases=sphere)
+        tau_Vp2 = dist.Field(name='tau_Vp2', bases=sphere)
+        tau_tb = dist.Field(name='tau_tb')
+        tau_pb = dist.Field(name='tau_pb')
+
+        # Entropy tau variables
+        tau_s1 = dist.Field(name='tau_s1', bases=sphere)
+        tau_s2 = dist.Field(name='tau_s2', bases=sphere)
+
+        # Background field
+        B0 = dist.VectorField(coords, name='B0', bases=shell.meridional_basis)
+        Bp, Bt, Br = B0_func(r_grid, t_grid)
+        B0['g'][0] = Bp
+        B0['g'][1] = Bt
+        B0['g'][2] = Br
+
+        # DR & Background flow
+        U0 = dist.VectorField(coords, name='U0', bases=shell.meridional_basis)
+        Up, Ut, Ur = U0_func(r_grid, t_grid)
+        U0['g'][0] = Up
+        U0['g'][1] = Ut
+        U0['g'][2] = Ur
+
+        DR = dist.Field(name='DR', bases=shell.meridional_basis)
+        DR['g'] = U0_func.diff_rot(r_grid, t_grid)
+        DR2 = dist.Field(name='DR2', bases=shell.meridional_basis)
+        DR2['g'] = U0_func.diff_rot(r_grid, t_grid)**2
+        dzDR = d3.dot(ez, d3.grad(DR))
+        dzDR2 = d3.dot(ez, d3.grad(DR2))
+        # dzDR = dist.Field(name='dzDR', bases=shell.meridional_basis)
+        # dzDR2 = dist.Field(name='dzDR2', bases=shell.meridional_basis)
+        # grad_DR = d3.grad(DR).evaluate()
+        # dzDR['g'] = 1.
+        # dzDR2['g'] = 1.
+        s_cyl = dist.Field(name="s_cyl", bases=shell.meridional_basis)
+        s_cyl['g'] = r_grid*np.sin(t_grid)
+
+        # Operators
+        lift_basis = shell.derivative_basis(1)
+        lift_t = lambda A: d3.Lift(A, shell, -1)
+        lift_u = lambda A: d3.Lift(A, lift_basis, -1)
+
+        L2 = lambda x: d3.SphericalEllProduct(x, coords, lambda ell: -ell*(ell + 1))
+        Mul_l = lambda x: d3.SphericalEllProduct(x, coords, lambda ell: ell)
+        Mul_lp1 = lambda x: d3.SphericalEllProduct(x, coords, lambda ell: ell + 1)
+
+        r_Curl = lambda x: d3.dot(rvec, d3.curl(x))
+        r_Curl2 = lambda x: d3.dot(rvec, d3.curl(d3.curl(x)))
+
+        # Intermediate variables
+        # Strain rate
+        # du_tau = d3.grad(u) + rvec*lift_u(tau_Pp1)
+        Eps = d3.grad(u) + d3.transpose(d3.grad(u)) - 2/3*d3.div(u)*Id_op
+
+        state_var = [
+            Tu, Pu, Tb, Pb, S,
+            tau_Pt1, tau_Pt2, tau_Pp1, tau_Pp2, tau_Pp3, tau_Pp4, 
+            tau_Vt1, tau_Vt2, tau_Vp1, tau_Vp2,
+            tau_s1, tau_s2,
+            tau_tu, tau_pu, tau_tb, tau_pb
+        ]
+
+        return locals()
+
+    @classmethod
+    def setup_problem(cls, Ek, Em, Et, Le, Ro_r, delta, Cb, Cdz1, Cdz2, fields_namespace: dict, 
+        v_bc_i: Literal['no-slip', 'stress-free'] = 'stress-free', 
+        v_bc_o: Literal['no-slip', 'stress-free'] = 'stress-free', 
+        b_bc_i: Literal['insulating', 'perfect-conducting'] = 'insulating',
+        b_bc_o: Literal['insulating', 'perfect-conducting'] = 'insulating',
+        s_bc_i: Literal['no-flux'] = 'no-flux',
+        s_bc_o: Literal['no-flux'] = 'no-flux',
+    ) -> d3.EigenvalueProblem:
+        
+        lamb = fields_namespace['lamb']
+        fine_namespace = {
+            'Ek': Ek, 'Em': Em, 'Et': Et, 'Le': Le, 'Ro_r': Ro_r, 'delta': delta, 
+            'Cb': Cb, 'Cdz1': Cdz1, 'Cdz2': Cdz2
+        }
+        fine_namespace = fields_namespace | fine_namespace
+
+        problem = d3.EVP(
+            fields_namespace['state_var'], 
+            eigenvalue=lamb, namespace=fine_namespace)
+        
+        problem.add_equation(
+            "r_Curl(lamb*u + 2*cross(ez, u) + Ro_r*(U0 @ grad(u) + u @ grad(U0)))"
+            "- Ek*r_Curl(irho0*div(rho0*Eps))"
+            "- Le*r_Curl(irho0*(cross(curl(b), B0) + cross(curl(B0), b)))"
+            "- Cb*r_Curl(S*g0*er)"
+            "+ div(rvec*lift_u(tau_Pt1)) + lift_u(tau_Pt2) + tau_tu = 0"
+        )
+        problem.add_equation(
+            "r_Curl2(lamb*u + 2*cross(ez, u) + Ro_r*(U0 @ grad(u) + u @ grad(U0)))"
+            "- Ek*r_Curl(curl(irho0*div(rho0*Eps)))"
+            "- Le*r_Curl2(irho0*(cross(curl(b), B0) + cross(curl(B0), b)))"
+            "- Cb*r_Curl2(S*g0*er)"
+            "+ div(grad(div(rvec*lift_u(tau_Pp1)) + lift_u(tau_Pp2)) + rvec*lift_u(tau_Pp3)) + lift_u(tau_Pp4) + tau_pu = 0"
+        )
+        problem.add_equation(
+            "lamb*L2(Tb) " 
+            "- Em*div(grad(L2(Tb)) + rvec*lift_u(tau_Vt1))" 
+            "+ r_Curl2(Le*cross(u, B0) + Ro_r*cross(U0, b))"
+            "+ lift_u(tau_Vt2) + tau_tb = 0"
+        )
+        problem.add_equation(
+            "lamb*L2(Pb) " 
+            "- Em*div(grad(L2(Pb)) + rvec*lift_u(tau_Vp1))" 
+            "+ r_Curl(Le*cross(u, B0) + Ro_r*cross(U0, b))"
+            "+ lift_u(tau_Vp2) + tau_pb = 0"
+        )
+        problem.add_equation(
+            "lamb*S"
+            "+ Ro_r*(U0 @ grad(S))"
+            "- delta*iHp*(er @ u)"
+            "+ (Cdz1*dzDR + Cdz2*dzDR2)*rmul*ig0*(et_sin @ u)"
+            # "+ rmul*(et_sin @ u)"
+            # "+ s_cyl*(et @ u)"
+            "- Et*(irho0*iT0)*div(rho0*T0*grad(S) + rvec*lift_u(tau_s1)) + lift_u(tau_s2) = 0"
+        )
+
+        # Boundary conditions
+        eq_bcs = {
+            'vT': {
+                'no-slip': [
+                    "Tu(r=Ri) = 0",
+                    "Tu(r=Ro) = 0"
+                ],
+                "stress-free": [
+                    "radial(grad(irho0*Tu)(r=Ri)) - (irho0*Tu)(r=Ri)/Ri = 0",
+                    "radial(grad(irho0*Tu)(r=Ro)) - (irho0*Tu)(r=Ro)/Ro = 0"
+                ]
+            },
+            'vP': {
+                'no-penetration': [
+                    "Pu(r=Ri) = 0",
+                    "Pu(r=Ro) = 0"
+                ],
+                'no-slip': [
+                    "radial(grad(Pu)(r=Ri)) = 0",
+                    "radial(grad(Pu)(r=Ro)) = 0"
+                ],
+                "stress-free": [
+                    "radial(radial(grad(irho0*grad(Pu))(r=Ri))) = 0",
+                    "radial(radial(grad(irho0*grad(Pu))(r=Ro))) = 0"
+                ]
+            }, 
+            'bT': {
+                'insulating': [
+                    "Tb(r=Ri) = 0",
+                    "Tb(r=Ro) = 0"
+                ],
+                'perfect-conducting': [
+                    "radial(grad(Tb)(r=Ri)) + Tb(r=Ri)/Ri = 0",
+                    "radial(grad(Tb)(r=Ro)) + Tb(r=Ro)/Ro = 0"
+                ]
+            },
+            'bP': {
+                'insulating': [
+                    "radial(grad(Pb)(r=Ri)) - Mul_l(Pb)(r=Ri)/Ri = 0",
+                    "radial(grad(Pb)(r=Ro)) + Mul_lp1(Pb)(r=Ro)/Ro = 0"
+                ],
+                'perfect-conducting': [
+                    "Pb(r=Ri) = 0",
+                    "Pb(r=Ro) = 0"
+                ]
+            },
+            'S': {
+                'no-flux': [
+                    "radial(grad(S)(r=Ri)) = 0",
+                    "radial(grad(S)(r=Ro)) = 0",
+                ]
+            }
+        }
+        problem.add_equation(eq_bcs['vT'][v_bc_i][0])
+        problem.add_equation(eq_bcs['vT'][v_bc_o][1])
+        problem.add_equation(eq_bcs['vP']['no-penetration'][0])
+        problem.add_equation(eq_bcs['vP']['no-penetration'][1])
+        problem.add_equation(eq_bcs['vP'][v_bc_i][0])
+        problem.add_equation(eq_bcs['vP'][v_bc_o][1])
+        problem.add_equation(eq_bcs['bT'][b_bc_i][0])
+        problem.add_equation(eq_bcs['bT'][b_bc_o][1])
+        problem.add_equation(eq_bcs['bP'][b_bc_i][0])
+        problem.add_equation(eq_bcs['bP'][b_bc_o][1])
+        problem.add_equation(eq_bcs['S'][s_bc_i][0])
+        problem.add_equation(eq_bcs['S'][s_bc_o][1])
+
+        # Gauge conditions
+        problem.add_equation("integ(Tu) = 0")
+        problem.add_equation("integ(Pu) = 0")
+        problem.add_equation("integ(Tb) = 0")
+        problem.add_equation("integ(Pb) = 0")
+
+        return problem
+    
+    @classmethod
+    def proc_rho_profile(cls, rho0: Callable, irho0: Callable):
+        if rho0 is None and irho0 is None:
+            raise ValueError("At least one of density profile or its reciprocal must be specified!")
+        if rho0 is None:
+            return ReciprocScalarFunc(irho0), irho0
+        if irho0 is None:
+            return rho0, ReciprocScalarFunc(rho0)
+
+    def __init__(self, geometry: tuple[float, float], resolution: tuple[int, int, int], 
+        B0_func: Callable = V0_axisym, U0_func: Callable = V0_axisym, 
+        rho0_func: Optional[Callable] = None, irho0_func: Optional[Callable] = None, 
+        g0_func: Callable = cst_profile, T0_func: Callable = cst_profile, iHp_func: Callable = zero_profile,
+        **params
+    ) -> None:
+
+        self.geometry = geometry
+        self.resolution = resolution
+        self.B0_func = B0_func
+        self.U0_func = U0_func
+        self.rho0_func, self.irho0_func = self.proc_rho_profile(rho0_func, irho0_func)
+        self.g0_func = g0_func
+        self.T0_func = T0_func
+        self.iHp_func = iHp_func
+        self.fields = self.setup_fields(geometry, resolution, 
+            B0_func=self.B0_func, U0_func=self.U0_func, 
+            rho0_func=self.rho0_func, inv_rho0_func=self.irho0_func,
+            g0_func=self.g0_func, T0_func=self.T0_func, iHp_func=self.iHp_func
+        )
+        self.u = self.fields['u']
+        self.b = self.fields['b']
+        self.problem = None
+        self.subprob = None
+        self.solver = None
+            
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        o_str = f'<{cls_name} geom={self.geometry} res={self.resolution}>'
+        return o_str
+    
+    def setup_model(self, **params_problem):
+
+        m = self.resolution[-1]
+        self.problem = self.setup_problem(1, 1, 1, 1, self.fields, **params_problem)
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.subprob = self.solver.subproblems_by_group[(m, None, None)]
+    
+    def setup_eigenmat(self, Ek, Em, Et, Le, Ro_r, delta, Cb, Cdz1, Cdz2, set_problem: bool = True, **params_problem):
+
+        m = self.resolution[-1]
+        problem = self.setup_problem(Ek, Em, Et, Le, Ro_r, delta, Cb, Cdz1, Cdz2, self.fields, **params_problem)
+        solver = problem.build_solver(ncc_cutoff=1e-10)
+        subprob = solver.subproblems_by_group[(m, None, None)]
+        solver.build_matrices([subprob,], ['M', 'L'])
+        K = sparse.csc_array(subprob.L_min)
+        M = sparse.csc_array(subprob.M_min)
+        
+        if set_problem:
+            self.problem = problem
+            self.subprob = subprob
+            self.solver = solver
+        
+        return K, M
+    
+    def precomp_submat(self, set_problem: bool = True, **params_problem):
+        
+        K_base, M_0 = self.setup_eigenmat(1, 1, 1, 1, 1, 1, 1, 1, 1, set_problem=set_problem, **params_problem)
+        K_Ek, _ = self.setup_eigenmat(2, 1, 1, 1, 1, 1, 1, 1, 1, set_problem=False, **params_problem)
+        K_Em, _ = self.setup_eigenmat(1, 2, 1, 1, 1, 1, 1, 1, 1, set_problem=False, **params_problem)
+        K_Et, _ = self.setup_eigenmat(1, 1, 2, 1, 1, 1, 1, 1, 1, set_problem=False, **params_problem)
+        K_Le, _ = self.setup_eigenmat(1, 1, 1, 2, 1, 1, 1, 1, 1, set_problem=False, **params_problem)
+        K_Ro, _ = self.setup_eigenmat(1, 1, 1, 1, 2, 1, 1, 1, 1, set_problem=False, **params_problem)
+        K_sa, _ = self.setup_eigenmat(1, 1, 1, 1, 1, 2, 1, 1, 1, set_problem=False, **params_problem)
+        K_Cb, _ = self.setup_eigenmat(1, 1, 1, 1, 1, 1, 2, 1, 1, set_problem=False, **params_problem)
+        K_O1, _ = self.setup_eigenmat(1, 1, 1, 1, 1, 1, 1, 2, 1, set_problem=False, **params_problem)
+        K_O2, _ = self.setup_eigenmat(1, 1, 1, 1, 1, 1, 1, 1, 2, set_problem=False, **params_problem)
+
+        K_vis = chop_sparse(K_Ek - K_base, thresh=1e-10)
+        K_eta = chop_sparse(K_Em - K_base, thresh=1e-10)
+        K_kap = chop_sparse(K_Et - K_base, thresh=1e-10)
+        K_mag = chop_sparse(K_Le - K_base, thresh=1e-10)
+        K_vel = chop_sparse(K_Ro - K_base, thresh=1e-10)
+        K_dSr = chop_sparse(K_sa - K_base, thresh=1e-10)
+        K_ach = chop_sparse(K_Cb - K_base, thresh=1e-10)
+        K_tw1 = chop_sparse(K_O1 - K_base, thresh=1e-10)
+        K_tw2 = chop_sparse(K_O2 - K_base, thresh=1e-10)
+        K_0 = chop_sparse(
+            K_base - K_vis - K_eta - K_kap - K_mag - K_vel - K_ach - K_dSr - K_tw1 - K_tw2, 
+            thresh=1e-10)
+
+        M_lib = {
+            "mass": M_0,
+            "coriolis": K_0, 
+            "viscous_diffusion": K_vis, 
+            "magnetic_diffusion": K_eta,
+            "thermal_diffusion": K_kap,
+            "lorentz_induction": K_mag,
+            "differential_rotation": K_vel,
+            "buoyancy": K_ach,
+            "super_adiabaticity": K_dSr,
+            "thermal_wind_1": K_tw1,
+            "thermal_wind_2": K_tw2
         }
         return M_lib
