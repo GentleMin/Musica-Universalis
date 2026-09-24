@@ -75,10 +75,13 @@ def plot_v_comp(xx, yy, ff, fig, gs, vcap=1e-7, title=None, invert_x=False, hand
     return ax
 
 
-def plot_positive(xx, yy, ff, fig, gs, vcap=1e-7, title=None, invert_x=False, handles=False):
+def plot_positive(xx, yy, ff, fig, gs, vcap=1e-7, ccap=None, title=None, invert_x=False, handles=False):
     ax = fig.add_subplot(gs)
-    ccap = vcap if np.abs(np.real(ff)).max() < vcap else None
-    im = ax.pcolormesh(xx, yy, np.real(ff), cmap='magma', norm=mpl.colors.Normalize(vmin=0, vmax=ccap), shading='gouraud')
+    if ccap is None:
+        ccap = vcap if np.abs(np.real(ff)).max() < vcap else None
+    norm = mpl.colors.Normalize(vmin=0, vmax=ccap)
+    # norm = mpl.colors.LogNorm(vmax=ccap)
+    im = ax.pcolormesh(xx, yy, np.real(ff), cmap='magma', norm=norm, shading='gouraud')
     cbar = plt.colorbar(im, ax=ax, orientation='horizontal')
     cbar.formatter.set_powerlimits((-2, 2))
     ax.set_title(title)

@@ -80,6 +80,7 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
     model.subprob.subsystems[0].scatter(v_view, model.solver.state)
 
     u = model.u.evaluate()
+    zeta = d3.curl(u).evaluate()
     dist = model.fields['dist']
     shell = model.fields['shell']
 
@@ -92,18 +93,17 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
 
     u_surf = u(r=r_sect).evaluate()
     u_surf.change_scales(scales_view)
-    zeta = d3.curl(u)
-    zeta = zeta(r=r_sect).evaluate()
-    zeta.change_scales(scales_view)
+    zeta_surf = zeta(r=r_sect).evaluate()
+    zeta_surf.change_scales(scales_view)
 
-    f_anchor = zeta['g'][2, 0, :, 0]
+    f_anchor = zeta_surf['g'][2, 0, :, 0]
     f_anchor = f_anchor[np.argmax(np.abs(f_anchor[:f_anchor.size//2]))]
     phi_rotate = -np.angle(f_anchor)/m_val
 
     phase = np.exp(1j*m_val*(np.radians(lon_view) + phi_rotate))
     u_surf_p = np.outer(u_surf['g'][0, 0, :, 0], phase)
     u_surf_t = np.outer(u_surf['g'][1, 0, :, 0], phase)
-    zeta_val = np.outer(zeta['g'][2, 0, :, 0], phase)
+    zeta_val = np.outer(zeta_surf['g'][2, 0, :, 0], phase)
 
     lat_mesh, lon_mesh = np.meshgrid(lat_view, lon_view, indexing='ij')
 
@@ -115,11 +115,16 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
 
     _, t_view, r_view = dist.local_grids(shell, scales=scales_view)
     u.change_scales(scales_view)
+    zeta.change_scales(scales_view)
     u_p = u['g'][0, 0, ...]*phase
     u_t = u['g'][1, 0, ...]*phase
     u_r = u['g'][2, 0, ...]*phase
-    u_s = u_r*np.sin(t_view[0, ...]) + u_t*np.cos(t_view[0, ...])
-    u_z = u_r*np.cos(t_view[0, ...]) - u_t*np.sin(t_view[0, ...])
+    # u_s = u_r*np.sin(t_view[0, ...]) + u_t*np.cos(t_view[0, ...])
+    # u_z = u_r*np.cos(t_view[0, ...]) - u_t*np.sin(t_view[0, ...])
+    zeta_p = zeta['g'][0, 0, ...]*phase
+    zeta_t = zeta['g'][1, 0, ...]*phase
+    zeta_r = zeta['g'][2, 0, ...]*phase
+    zeta_norm = np.sqrt(np.sum(np.abs(zeta['g'][:, 0, ...])**2, axis=0))
 
     t_mesh, r_mesh = np.meshgrid(t_view[0, :, 0], r_view[0, 0, :], indexing='ij')
     s_mesh, z_mesh = r_mesh*np.sin(t_mesh), r_mesh*np.cos(t_mesh)
@@ -128,12 +133,15 @@ def calc_hydro_fields(model, v_view, r_sect=1.):
         'lon': lon_mesh,
         'lat': lat_mesh,
         's': s_mesh,
-        'z': z_mesh
+        'z': z_mesh,
+        'rg': r_view[0, 0, :],
+        'tg': t_view[0, :, 0],
     }
     mhd_fields = {
         'u_r': u_r,
         'u_t': u_t,
         'u_p': u_p,
+        'zeta_norm': zeta_norm,
         'u_surf_t': u_surf_t,
         'u_surf_p': u_surf_p,
         'zeta_val': zeta_val,
@@ -227,6 +235,124 @@ def calc_mhd_fields(model, v_view, r_sect=1.):
         'b_surf_p': b_surf_p,
     }
     return coords, mhd_fields
+
+
+def main_Hydro_DR():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-vector')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print("\n=================== Hydro (DR) Visualisation =======================\n")
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}", flush=True)
+    
+    v_view = np.load(args.input_vector)[:, 0]
+
+    ri, ro = 0.71, 1
+
+    model = evp_shell.ModelEVP_DiffRShell_TorPol((ri, ro), args.res, U0_func=null_vector)
+    model.setup_model(bc="stress-free")
+    
+    r_sect = 1.*ro
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(10, 6))
+
+    coords, fields = calc_hydro_fields(model, v_view, r_sect=r_sect)
+    norm = 1/np.abs(fields['u_t']).max()
+
+    fig.clear()
+    gs = fig.add_gridspec(1, ncol_proj+3)
+
+    ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+    ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    if args.output is not None:
+        plottings.figsave(fig, args.output, formats=('jpg',), dpi=200, overwrite=args.overwrite, bbox_inches='tight')
+    plt.show()
+
+
+def main_batch_Hydro_scanEk():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-files')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output-files')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print("\n=================== Hydro (DR) Visualisation =======================\n")
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}", flush=True)
+    Ek_arr = np.logspace(-6, -3, num=25)
+
+    ri, ro = 0.71, 1
+    r_sect = 1.0*ro
+
+    model = evp_shell.ModelEVP_DiffRShell_TorPol((ri, ro), args.res, U0_func=null_vector)
+    model.setup_model(bc="stress-free")
+    
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(2*(ncol_proj + 5), 6))
+
+    for iEk, Ek in enumerate(Ek_arr):
+        print(f"\n-------------------- Ek = {Ek:.02e} ---------------------\n", flush=True)
+        v_file = args.input_files + f"_Ek{Ek:.02e}.npy"
+        v_view = np.load(v_file)[:, 0]
+        coords, fields = calc_hydro_fields(model, v_view, r_sect=r_sect)
+        norm = 1/np.abs(fields['u_t']).max()
+
+        fig.clear()
+        gs = fig.add_gridspec(1, ncol_proj+4)
+
+        ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+        plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+        ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+        ccap = np.max(norm*fields['zeta_norm'][:, (coords['rg'] > 0.72*ro) & (coords['rg'] < 0.98*ro)])
+        print(f"\tccap={ccap}")
+        ax = plottings.plot_positive(coords['s'], coords['z'], norm*fields['zeta_norm'], fig, 
+            gs[0,ncol_proj+3], ccap=ccap, title=r'$|\nabla\times\mathbf{u}|$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.3)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.3, linestyle='--')
+        fig.suptitle(r"$m$ = %d, $Ek$ = %.2e" % (8, Ek))
+
+        if args.output_files is not None:
+            # fig_file = args.output_files + f"_Ek{Ek:.02e}"
+            fig_file = args.output_files + f"_iEk{iEk:02d}"
+            plottings.figsave(fig, fig_file, formats=('jpg',), dpi=200, overwrite=args.overwrite)
+            print(f"\t Image generated & saved to {fig_file}", flush=True)
+
+    plt.show()
 
 
 def main_DR_branch_Ro():
@@ -428,4 +554,4 @@ def main_Anelastic_MDR():
 
 
 if __name__ == '__main__':
-    main_Anelastic_MDR()
+    main_batch_Hydro_scanEk()

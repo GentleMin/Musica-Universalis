@@ -272,7 +272,7 @@ class MagBG_SolarTa_FastDecay(AxisymVectorBG):
         T_basis = qbasis.ChebyshevT(Nr, interval=(Ri, Ro))
         self.f_B0 = qfield.ShellTorPol_m(T_basis, Plm_basis, 'tor', dtype=np.float64)
         s_Plm = np.array([0, 0, +1.13435906, 0, -0.198508946, 0, +0.0389425606, 0, -0.0419644077, 0, +0.0100597563])
-        s_T = np.array([0.97091952, -0.49407104,  0.07285458,  0.00857464, -0.05667983, -0.01613811])
+        s_T = np.array([0.97091952, -0.49407104, 0.07285458, 0.00857464, -0.05667983, -0.01613811])
         for l in range(L+1):
             self.f_B0.spectrum[l*Nr:(l+1)*Nr] = s_Plm[l]*s_T
 
@@ -478,6 +478,12 @@ class SolarDiffRot_SHT_LSQ(AxisymVectorBG):
         return Up, Ut, Ur
 
 
+class NullDiffRot(NullVector):
+
+    def diff_rot(self, r, t):
+        return np.zeros_like(r*t)
+
+
 """
 Anelastic background density profiles
 """
@@ -657,3 +663,143 @@ class rDensity_SCZ_M25Interp(ScalarRProfile):
         r_int = (self.Ro_int/self.Ro)*r
         return self.norm/self.f_rho(r_int)
 
+
+class T0_SCZ_M25Interp(ScalarRProfile):
+    """
+    Temperature profile based on linear interpolation of the profile used in Mukhopadyay+ 2025
+    """
+    default_bg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "background.npz")
+
+    def __init__(self, *args, Ro=1.0, path_bg=None, norm=None, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        self.path_bg = self.default_bg_path if path_bg is None else path_bg
+        bg = np.load(self.path_bg)
+        r_grid = bg['R']
+        T0_grid = bg['T0']
+        self.f_T0 = interpolate.interp1d(r_grid, T0_grid)
+        self.norm = self.f_T0(0.71) if norm is None else norm
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        return self.f_T0(r_int)/self.norm
+
+
+class g0_SCZ_M25Interp(ScalarRProfile):
+    """
+    Gravitational acceleartion profile based on linear interpolation of the profile used in Mukhopadyay+ 2025
+    """
+    default_bg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "background.npz")
+
+    def __init__(self, *args, Ro=1.0, path_bg=None, norm=None, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        self.path_bg = self.default_bg_path if path_bg is None else path_bg
+        bg = np.load(self.path_bg)
+        r_grid = bg['R']
+        g0_grid = bg['g']
+        self.f_g0 = interpolate.interp1d(r_grid, g0_grid)
+        self.norm = self.f_g0(0.71) if norm is None else norm
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        return self.f_g0(r_int)/self.norm
+
+
+class Hp_SCZ_M25Interp(ScalarRProfile):
+    """
+    Pressure scale height profile based on linear interpolation of the profile used in Mukhopadyay+ 2025
+    """
+    default_bg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "background.npz")
+
+    def __init__(self, *args, Ro=1.0, path_bg=None, norm=None, **kwds) -> None:
+        self.Ro = Ro
+        self.Ro_int = 1.0
+        self.path_bg = self.default_bg_path if path_bg is None else path_bg
+        bg = np.load(self.path_bg)
+        r_grid = bg['R']
+        Hp_grid = bg['p0']/bg['rho0']/bg['g']
+        self.f_Hp = interpolate.interp1d(r_grid, Hp_grid)
+        self.norm = self.f_Hp(0.71) if norm is None else norm
+
+    def __call__(self, r):
+        r_int = (self.Ro_int/self.Ro)*r
+        return self.f_Hp(r_int)/self.norm
+
+
+# Gravitational constant in cgs units [cm^3 g^(-1) s^(-2)]
+G_Cst_cgs = 6.6743e-8
+
+class StdSolarModel():
+    """
+    Interface to load Standard Solar Model
+    """
+    default_model_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "fgong.l5bi.d.15.txt")
+
+    def __init__(self, model_path = None):
+
+        self.model_path = self.default_model_path if model_path is None else model_path
+        with open(self.model_path, 'r') as fp:
+            self.name = fp.readline().strip()
+            self.description = fp.readline().strip()
+            self.src = fp.readline().strip()
+            fp.readline()
+            meta = fp.readline()
+            pars = pd.read_fwf(fp, widths=[16,]*5, header=None, nrows=3)
+            data = pd.read_fwf(fp, widths=[16,]*5, header=None)
+        meta = meta.split()
+        self.counts = list(map(int, meta))
+        self.pars = pars.to_numpy().flatten().astype(float)
+        self.data = data.to_numpy().astype(float)
+        assert self.pars.size == self.counts[1]
+        assert self.data.size == self.counts[0]*self.counts[2]
+        self.data = np.reshape(self.data, (self.counts[0], self.counts[2]))
+        keys_par = [
+            "M", "R", "Ls", "Z", "X0",
+            "alpha", "phi", "xi", "beta", "lambda",
+            "R2_dr2pc_divpc", "R2_dr2rhoc_divrhoc", "Age", "None-1", "None-2"
+        ]
+        self.pars = {key: self.pars[i] for i, key in enumerate(keys_par)}
+        keys = [
+            "r", "lnq", "T", "P", "rho", 
+            "X", "L", "k", "e", "gamma", 
+            "grad_ad", "delta", "cp", "i_muc", "Ledoux", 
+            "rX", "Z", "D", "eg", "Lg",
+            "XHe-3", "XC-12", "XC-13", "XN-14", "XO-16"
+        ]
+        self.data = {key: self.data[:, i] for i, key in enumerate(keys)}
+        self.derive_extra()
+    
+    def __repr__(self):
+        o_str = f"<Standard Model {self.name}>"
+        return o_str
+    
+    def __str__(self):
+        hline = '-'*64
+        o_str = f"\n{hline}\nStandard Solar Model {self.name}\n{self.description}\n{self.src}"
+        o_str += "\n\tnn={}, iconst={}, ivars={}, ivers={}".format(*self.counts)
+        o_str += f"\n{hline}\n"
+        return o_str
+    
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self.data[key]
+        else:
+            raise KeyError
+        
+    def param(self, key):
+        return self.pars[key]
+    
+    def derive_extra(self):
+        g = G_Cst_cgs*self.pars["M"]*np.exp(self.data["lnq"])/self.data["r"]**2
+        Hp = self.data["P"]/self.data["rho"]/g
+        cs = np.sqrt(self.data["gamma"]*self.data["P"]/self.data["rho"])
+        self.data.update(g=g, Hp=Hp, cs=cs)
+    
+    def f_profile_interp(self, key, Ro=1, norm_r=None):
+        f = interpolate.interp1d(self.data["r"]/self.pars["R"], self.data[key])
+        norm = f(norm_r) if norm_r is not None else 1
+        def f_out(r):
+            r_int = r/Ro
+            return f(r_int)/norm
+        return f_out
