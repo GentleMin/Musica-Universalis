@@ -3147,15 +3147,23 @@ class ModelEVP_SCZ_AMADR_TorPol:
         o_str = f'<{cls_name} geom={self.geometry} res={self.resolution}>'
         return o_str
     
+    def renew_fields(self):
+        self.fields = self.setup_fields(self.geometry, self.resolution, 
+            B0_func=self.B0_func, U0_func=self.U0_func, 
+            rho0_func=self.rho0_func, inv_rho0_func=self.irho0_func,
+            g0_func=self.g0_func, T0_func=self.T0_func, iHp_func=self.iHp_func
+        )
+    
     def setup_model(self, **params_problem):
 
         m = self.resolution[-1]
-        self.problem = self.setup_problem(1, 1, 1, 1, self.fields, **params_problem)
+        self.problem = self.setup_problem(1, 1, 1, 1, 1, 1, 1, 1, 1, self.fields, **params_problem)
         self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
         self.subprob = self.solver.subproblems_by_group[(m, None, None)]
     
     def setup_eigenmat(self, Ek, Em, Et, Le, Ro_r, delta, Cb, Cdz1, Cdz2, set_problem: bool = True, **params_problem):
 
+        self.renew_fields()
         m = self.resolution[-1]
         problem = self.setup_problem(Ek, Em, Et, Le, Ro_r, delta, Cb, Cdz1, Cdz2, self.fields, **params_problem)
         solver = problem.build_solver(ncc_cutoff=1e-10)
