@@ -143,3 +143,35 @@ def slice_Hydro_sym_from_MHD(A, N, dL, sym_v=0, perm=None):
     A = A[np.ix_(idx_perm, idx_perm)]
     perm = perm[np.ix_(idx_perm, idx)]
     return A, perm
+
+
+def slice_sym_AnelasticS(A, N, dL, sym_v=0, perm=None):
+
+    A = sparse.csr_array(A)
+    Nd = N*dL
+
+    idx_v_tor = idx_sym_torpol(N, dL, sym=sym_v, type_='t')
+    idx_v_pol = idx_sym_torpol(N, dL, sym=sym_v, type_='p')
+    idx_s = idx_sym(N, dL, sym=sym_v)
+    idx = np.r_[idx_v_tor, Nd + idx_v_pol, 2*Nd + idx_s]
+
+    # Tau variables
+    itau_v_t = np.arange(dL)[((sym_v+1)%2)::2]
+    itau_v_p = np.arange(dL)[((sym_v+0)%2)::2]
+    itau_s = np.arange(dL)[((sym_v+0)%2)::2]
+    idx = np.r_[idx, 
+        3*Nd + 0*dL + itau_v_t, 3*Nd + 1*dL + itau_v_t,
+        3*Nd + 2*dL + itau_v_p, 3*Nd + 3*dL + itau_v_p, 3*Nd + 4*dL + itau_v_p, 3*Nd + 5*dL + itau_v_p,
+        3*Nd + 6*dL + itau_s, 3*Nd + 7*dL + itau_s
+    ]
+
+    if perm is None:
+        perm = sparse.eye_array(A.shape[0], format='csr')
+    
+    ele_arr = np.zeros(A.shape[0])
+    ele_arr[idx] = 1
+    idx_perm = np.arange(A.shape[0])[np.asarray(perm @ ele_arr, dtype=bool)]
+
+    A = A[np.ix_(idx_perm, idx_perm)]
+    perm = perm[np.ix_(idx_perm, idx)]
+    return A, perm

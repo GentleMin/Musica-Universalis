@@ -620,6 +620,12 @@ class LinearProfile(ScalarRProfile):
     def __call__(self, r):
         f_vals = (r - self.Ri)/(self.Ro - self.Ri)*(self.fo - self.fi) + self.fi
         return f_vals
+
+
+class CstProfile(LinearProfile):
+
+    def __init__(self, *args, cst=1, **kwds):
+        super().__init__(*args, fi=cst, fo=cst, **kwds)
     
 
 class Density_SCZ_M25Interp(ScalarRProfile):
@@ -796,10 +802,10 @@ class StdSolarModel():
         cs = np.sqrt(self.data["gamma"]*self.data["P"]/self.data["rho"])
         self.data.update(g=g, Hp=Hp, cs=cs)
     
-    def f_profile_interp(self, key, Ro=1, norm_r=None):
+    def f_profile_interp(self, key, Ro=1, norm_r=None, pow=1):
         f = interpolate.interp1d(self.data["r"]/self.pars["R"], self.data[key])
         norm = f(norm_r) if norm_r is not None else 1
         def f_out(r):
             r_int = r/Ro
-            return f(r_int)/norm
+            return (f(r_int)/norm)**pow
         return f_out
