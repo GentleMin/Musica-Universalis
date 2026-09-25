@@ -56,6 +56,13 @@ def spy_cmarker(Z, ax: plt.Axes, precision=0, transform=lambda x: x,
     return pts
 
 
+def mat_grids(g_row, g_col, ax, Nr=None, Nc=None, **kwds):
+    Nr = np.max(g_row) if Nr is None else Nr
+    Nc = np.max(g_col) if Nc is None else Nc
+    ax.hlines(g_row, 0, Nr, **kwds)
+    ax.vlines(g_col, 0, Nc, **kwds)
+
+
 def plot_v_comp(xx, yy, ff, fig, gs, vcap=1e-7, title=None, invert_x=False, handles=False):
     ax = fig.add_subplot(gs)
     ccap = vcap if np.abs(np.real(ff)).max() < vcap else None
