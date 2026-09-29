@@ -802,10 +802,10 @@ class StdSolarModel():
         cs = np.sqrt(self.data["gamma"]*self.data["P"]/self.data["rho"])
         self.data.update(g=g, Hp=Hp, cs=cs)
     
-    def f_profile_interp(self, key, Ro=1, norm_r=None, pow=1):
+    def f_profile_interp(self, key, Ro=1, norm_r=None, npow=1):
         f = interpolate.interp1d(self.data["r"]/self.pars["R"], self.data[key])
         norm = f(norm_r) if norm_r is not None else 1
         def f_out(r):
             r_int = r/Ro
-            return (f(r_int)/norm)**pow
+            return (f(r_int)/norm)**npow
         return f_out
