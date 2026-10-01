@@ -115,6 +115,26 @@ def slice_Hydro_from_MHD(A, N, dL, perm=None):
     return A, perm
 
 
+def map_vec_Hydro2MHD(N, dL):
+    Nd = N*dL
+    i_scalar = np.arange(Nd)
+    i_tau = np.arange(dL)
+    idx_hydro = np.r_[
+        i_scalar, Nd + i_scalar,
+        2*Nd + 0*dL + i_tau, 2*Nd + 1*dL + i_tau,
+        2*Nd + 2*dL + i_tau, 2*Nd + 3*dL + i_tau, 2*Nd + 4*dL + i_tau, 2*Nd + 5*dL + i_tau,
+    ]
+    idx_mhd = np.r_[
+        i_scalar, Nd + i_scalar,
+        4*Nd + 0*dL + i_tau, 4*Nd + 1*dL + i_tau,
+        4*Nd + 2*dL + i_tau, 4*Nd + 3*dL + i_tau, 4*Nd + 4*dL + i_tau, 4*Nd + 5*dL + i_tau,
+    ]
+    T = sparse.coo_array(
+        (np.ones(idx_hydro.size, dtype=int), [idx_mhd, idx_hydro]), 
+        shape=(4*Nd + 10*dL, 2*Nd + 6*dL))
+    return T
+
+
 def slice_Hydro_sym_from_MHD(A, N, dL, sym_v=0, perm=None):
 
     A = sparse.csr_array(A)

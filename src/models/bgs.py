@@ -809,3 +809,28 @@ class StdSolarModel():
             r_int = r/Ro
             return (f(r_int)/norm)**npow
         return f_out
+
+    def f_profile_spline(self, key, Ro=1, norm_r=None, pow=1, **kw_spline):
+        f = interpolate.make_interp_spline(np.flip(self.data["r"])/self.pars["R"], np.flip(self.data[key]), **kw_spline)
+        norm = f(norm_r) if norm_r is not None else 1
+        def f_out(r):
+            r_int = r/Ro
+            return (f(r_int)/norm)**pow
+        return f_out
+
+    def rho_polytropic(self, Ro=1, r_anchor=0.71, norm_r=None, npoly=3/2):
+        i_anchor = np.argmin(np.abs(self.data["r"]/self.pars["R"] - r_anchor))
+        r0 = self.data["r"][i_anchor]
+        C0 = r0/self.data["Hp"][i_anchor]/(npoly + 1)
+        rho0 = self.data["rho"][i_anchor]
+        Rs = self.pars["R"]
+        def f_out(r):
+            r_rel = (r/Ro)/(r0/Rs)
+            zeta = C0/r_rel + (1 - C0)
+            if norm_r is not None:
+                zeta_ref = C0/(norm_r/(r0/Rs)) + (1 - C0)
+                return (zeta/zeta_ref)**npoly
+            else:
+                return rho0*zeta**npoly
+        return f_out
+    

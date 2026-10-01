@@ -11,7 +11,7 @@ from scipy.sparse import linalg as spla
 # from models import evp_shell
 # from utils import plottings, eigs
 from src.models import evp_shell, bgs
-from src.utils import plottings, eigs
+from src.utils import plottings, eigs, sym_slicer
 
 cwd = os.getcwd()
 
@@ -552,6 +552,209 @@ def main_Anelastic_MDR():
     plt.show()
 
 
+def main_Anelastic_scanRo():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-vector')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-hydro', action="store_true")
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}", flush=True)
+
+    v_view = np.load(args.input_vector)[:, 0]
+    if args.hydro:
+        Tmat = sym_slicer.map_vec_Hydro2MHD(args.res[0], args.res[1] - args.res[2])
+        v_view = Tmat @ v_view
+
+    ri, ro = 0.71, 1
+
+    mS = bgs.StdSolarModel()
+    rho0 = mS.f_profile_interp("rho", norm_r=0.71)
+    model = evp_shell.ModelEVP_AnelasticMDRShell_TorPol((ri, 0.985*ro), args.res, 
+        B0_func=null_vector, U0_func=null_vector, rho0_func=rho0)
+    model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
+    
+    r_sect = 1.*ro
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(10, 6))
+
+    coords, fields = calc_mhd_fields(model, v_view, r_sect=r_sect)
+    norm = 1/np.abs(fields['u_t']).max()
+
+    fig.clear()
+    gs = fig.add_gridspec(2, ncol_proj+3)
+
+    ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+    ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    ax = fig.add_subplot(gs[1, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['b_surf_r'], ax)
+    ax.set_title(r'$b_r$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_r'], fig, gs[1,ncol_proj], title=r'$b_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_t'], fig, gs[1,ncol_proj+1], title=r'$b_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['b_p'], fig, gs[1,ncol_proj+2], title=r'$b_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    if args.output is not None:
+        plottings.figsave(fig, args.output, formats=('png',), dpi=200, overwrite=args.overwrite, bbox_inches='tight')
+    plt.show()
+
+
+def main_Anelastic_scanRo_Hydro():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-vector')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print("\n=================== Anelastic Visualisation for different DR =======================\n")
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}", flush=True)
+
+    Tmat = sym_slicer.map_vec_Hydro2MHD(args.res[0], args.res[1] - args.res[2])
+    v_view = Tmat @ np.load(args.input_vector)[:, 0]
+
+    ri, ro = 0.71, 1
+
+    # mS = bgs.StdSolarModel()
+    # rho0 = mS.f_profile_interp("rho", norm_r=0.71, pow=1)
+    irho0 = bgs.rDensity_SCZ_N24_Scale6_5(Ro=ro)
+    model = evp_shell.ModelEVP_AnelasticMDRShell_TorPol((ri, 0.985*ro), args.res, 
+        B0_func=null_vector, U0_func=null_vector, irho0_func=irho0)
+    model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
+    
+    r_sect = 1.*ro
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+
+    fig = plt.figure(figsize=(2*(ncol_proj + 5), 6))
+
+    coords, fields = calc_mhd_fields(model, v_view, r_sect=r_sect)
+    norm = 1/np.abs(fields['u_t']).max()
+
+    fig.clear()
+    gs = fig.add_gridspec(1, ncol_proj+3)
+
+    ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+    plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+    ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+    ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+    plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+    plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+    if args.output is not None:
+        plottings.figsave(fig, args.output, formats=('png',), dpi=200, overwrite=args.overwrite, bbox_inches='tight')
+    plt.show()
+
+
+def batch_Anelastic_scanRo_Hydro():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input')
+    parser.add_argument('-iw', '--input-branch-file')
+    parser.add_argument('-path')
+    parser.add_argument('-res', type=int, nargs=3)
+    parser.add_argument('-o', '--output')
+    parser.add_argument('-w', '--overwrite', action='store_true')
+    args = parser.parse_args()
+    print("\n=================== Anelastic Visualisation for different DR =======================\n")
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}", flush=True)
+
+    Tmat = sym_slicer.map_vec_Hydro2MHD(args.res[0], args.res[1] - args.res[2])
+    ri, ro = 0.71, 1
+    r_sect = 1.*ro
+    # mS = bgs.StdSolarModel()
+    # rho0 = mS.f_profile_interp("rho", norm_r=0.71, pow=1)
+    irho0 = bgs.rDensity_SCZ_N24_Scale6_5(Ro=ro)
+    model = evp_shell.ModelEVP_AnelasticMDRShell_TorPol((ri, 0.985*ro), args.res, 
+        B0_func=null_vector, U0_func=null_vector, irho0_func=irho0)
+    model.setup_model(v_bc_i="stress-free", v_bc_o="stress-free", b_bc_i="perfect-conducting", b_bc_o="insulating")
+
+    with h5py.File(args.input_branch_file, 'r') as fp:
+        gp = fp[args.path]
+        Ro_arr = gp["Ro"][()]
+        w_arr = gp["w"][()]
+    
+    # proj = ccrs.Mollweide(central_longitude=0)
+    # ncol_proj = 3
+    proj = ccrs.Orthographic(central_longitude=0, central_latitude=20)
+    ncol_proj = 2
+    fig = plt.figure(figsize=(2*(ncol_proj + 5), 6))
+
+    for iRo, Ro in enumerate(Ro_arr):
+
+        print(f"\n--------------------------- Ro = {Ro:.2e} -----------------------------\n")
+
+        w_tmp = w_arr[iRo]
+        evec_fname = args.input + f"_Ro{Ro:.2e}.npy"
+        v_view = Tmat @ np.load(evec_fname)[:, 0]
+
+        coords, fields = calc_mhd_fields(model, v_view, r_sect=r_sect)
+        norm = 1/np.abs(fields['u_t']).max()
+
+        fig.clear()
+        gs = fig.add_gridspec(1, ncol_proj+3)
+
+        ax = fig.add_subplot(gs[0, :ncol_proj], projection=proj)
+        plottings.plot_sphere(coords['lon'], coords['lat'], norm*fields['zeta_val'], ax)
+        ax.set_title(r'$\hat{\mathbf{r}}\cdot \nabla\times \mathbf{u}$')
+
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_r'], fig, gs[0,ncol_proj], title=r'$u_r$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_t'], fig, gs[0,ncol_proj+1], title=r'$u_\theta$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+        ax = plottings.plot_v_comp(coords['s'], coords['z'], norm*fields['u_p'], fig, gs[0,ncol_proj+2], title=r'$u_\phi$')
+        plottings.plot_r_outline([ri, ro], np.linspace(0, np.pi, num=100), ax, linewidth=0.5)
+        plottings.plot_r_outline([r_sect], np.linspace(0, np.pi, num=100), ax, linewidth=0.5, linestyle='--')
+
+        fig.suptitle(f"Ro = {Ro:.2f}, $\\lambda$ = {w_tmp:.2e}")
+
+        if args.output is not None:
+            # evec_savename = args.output + f"_Ro{Ro:.2e}"
+            evec_savename = args.output + f"_iRo{iRo:02d}"
+            plottings.figsave(fig, evec_savename, formats=('jpg',), dpi=200, overwrite=args.overwrite)
+            print(f"Figure generated at {evec_savename}", flush=True)
+        # break
+    plt.show()
+
 
 if __name__ == '__main__':
-    main_batch_Hydro_scanEk()
+    # main_batch_Hydro_scanEk()
+    batch_Anelastic_scanRo_Hydro()
