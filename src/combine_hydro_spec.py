@@ -11,7 +11,7 @@ import time
 
 matdir_re = re.compile(r'Mat_m([0-9]+)_([0-9]+)x([0-9]+)')
 # matdir_re = re.compile(r"Mat_([0-9]+)x([0-9]+)x([0-9]+)")
-evfile_re = re.compile(r'spec_Ek([^_]+)_v(\d).npy')
+# evfile_re = re.compile(r'spec_Ek([^_]+)_v(\d).npy')
 # evfile_re = re.compile(r'spec_Ek([^_]+)_Ro([^_]+).npy')
 evfile_re = re.compile(r'spec_Ek([^_]+)_Em([^_]+)_Le([^_]+)_Ro([^_]+)_v(\d)_hydro.npy')
 

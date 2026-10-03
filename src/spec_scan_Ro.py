@@ -133,7 +133,7 @@ def main_scanRo_MHD():
     parser.add_argument('-w', '--overwrite', action='store_true')
 
     args = parser.parse_args()
-    par_list = np.r_[np.arange(0.0, 0.3, step=0.02), np.arange(0.3, 1.0, step=0.1), 1.0]
+    par_list = np.r_[np.arange(0.0, 0.3, step=0.02), np.arange(0.3, 1.0, step=0.1), 1.0][:1]
     timer = timers.ProcTimer(start=True)
     print("\n============================================================================================")
     print("                     Calculating full spectrum of eigenvalue problem                        ")
@@ -179,6 +179,9 @@ def main_scanRo_MHD():
     
         if args.dedalus_operators:
             B *= -1
+
+        if args.gevp:
+            fname = fname + f"_gevp"
     
         if os.path.exists(fname + '.npy') and (not args.overwrite):
             timer.flag(loginfo="File exists! Skipping...", print_str=True, mode='0+', flush=True)

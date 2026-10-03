@@ -203,6 +203,81 @@ def main_hydro():
         print(f"\t\tEigenvectors saved to {args.output_vector}\n", flush=True)
 
 
+def main_dispersion_mhd():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-dir')
+    parser.add_argument('-w0-file')
+    parser.add_argument('-w0-path')
+    parser.add_argument('-hydro', action="store_true")
+    parser.add_argument('-res', type=int, nargs=2)
+    parser.add_argument('-symmv', type=int)
+    parser.add_argument('-symmb', type=int)
+    parser.add_argument('-v', '--output-vector')
+    args = parser.parse_args()
+
+    with h5py.File(args.w0_file, 'r') as fp:
+        gp = fp[args.w0_path]
+        Ek = gp.attrs["Ek"]
+        Em = gp.attrs["Em"]
+        Le = gp.attrs["Le"]
+        Ro = gp.attrs["Ro"]
+        m_arr = gp["m"][()]
+        seeds = gp["w"][()]
+    assert m_arr.size == seeds.size
+    N, dL = args.res
+
+    print(
+        "\n============================================================\n" +
+        "                  Solve eigen-pairs for params                   \n")
+    for key, val in vars(args).items():
+        print(f"\t{key}={val}")
+    print(f"Ek={Ek:+.02e}")
+    print(f"Em={Em:+.02e}")
+    print(f"Le={Le:+.02e}")
+    print(f"Ro={Ro:+.02e}")
+    print("------------------------------------------------------------\n", flush=True)
+
+    for im, m in enumerate(m_arr):
+        
+        print(f"------------------------- m = {m:.02e} -----------------------", flush=True)
+        if args.output_vector is not None:
+            save_name = args.output_vector + f"_m{m:02d}.npy"
+            if os.path.exists(save_name):
+                print(f"\t\tEigenvectors already exist... Skipping\n", flush=True)
+                continue
+
+        m_dir = os.path.join(args.dir, f"Mat_m{m}_{N}x{m+dL}/ops")
+        M_lib = load_matrices(m_dir)
+
+        A, B = setup_op_spin_DR(M_lib, E=Ek, Em=Em, Le=Le, Ro=Ro)
+        P = M_lib["perm"]
+        ev0 = seeds[im]
+        
+        if not np.isfinite(ev0):
+            continue
+
+        if args.symmv is not None and args.symmb is not None:
+            A, _ = sym_slicer.slice_sym_MHD(A, N, dL, sym_v=args.symmv, sym_b=args.symmb, perm=P)
+            B, P = sym_slicer.slice_sym_MHD(B, N, dL, sym_v=args.symmv, sym_b=args.symmb, perm=P)
+
+        print(f"\t\tTarget:{ev0:+24.4f}", flush=True)
+
+        starttime = time.perf_counter()
+        ev_solved, vectors = eig.single_eig(A, -B, ev0, nev=1, maxiter=50, tol=1e-12)
+        elapsed = time.perf_counter() - starttime
+
+        print(f"\t\tSolved:")
+        for i, ev in enumerate(ev_solved):
+            print(f"\t\t{i:6d}:{ev:+24.4f}")
+        print(f"\t\tArnold iterations finished in {elapsed:.2f}s.\n", flush=True)
+
+        if args.output_vector is not None:
+            vectors = P.T @ vectors
+            np.save(save_name, vectors)
+            print(f"\t\tEigenvectors saved to {save_name}\n", flush=True)
+        
+        del M_lib, A, B, P
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -255,5 +330,5 @@ def main():
 if __name__ == '__main__':
     # main()
     # main_scanEk_hydro()
-    main_scanRo_hydro()
-
+    # main_scanRo_hydro()
+    main_dispersion_mhd()

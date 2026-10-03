@@ -58,34 +58,31 @@ def load_matrices(lib_dir):
 
 
 def setup_op_Alfven(M_lib, Le, Lu, Pm):
-    B = M_lib['mass']
-    A = (1/Le)*M_lib['coriolis'] \
-        + M_lib['lorentz_induction'] \
-        + (Pm/Lu)*M_lib['viscous_diffusion'] \
-        + (1/Lu)*M_lib['magnetic_diffusion']
-    if 'tau' in M_lib:
-        A += M_lib['tau']
+    B = M_lib['mass'].copy()
+    A = (1/Le)*M_lib.get('coriolis', 0) \
+        + M_lib.get('lorentz_induction', 0) \
+        + (Pm/Lu)*M_lib.get('viscous_diffusion', 0) \
+        + (1/Lu)*M_lib.get('magnetic_diffusion', 0) \
+        + M_lib.get('tau', 0)
     return A, B
 
 def setup_op_spin(M_lib, E, Em, Le):
-    B = M_lib['mass']
-    A = M_lib['coriolis'] \
-        + Le*M_lib['lorentz_induction'] \
-        + E*M_lib['viscous_diffusion'] \
-        + Em*M_lib['magnetic_diffusion']
-    if 'tau' in M_lib:
-        A += M_lib['tau']
+    B = M_lib['mass'].copy()
+    A = M_lib.get('coriolis', 0) \
+        + Le*M_lib.get('lorentz_induction', 0) \
+        + E*M_lib.get('viscous_diffusion', 0) \
+        + Em*M_lib.get('magnetic_diffusion', 0) \
+        + M_lib.get('tau', 0)
     return A, B
 
 def setup_op_spin_DR(M_lib, E, Em, Le, Ro):
-    B = M_lib['mass']
-    A = M_lib['coriolis'] \
-        + Le*M_lib['lorentz_induction'] \
-        + E*M_lib['viscous_diffusion'] \
-        + Em*M_lib['magnetic_diffusion'] \
-        + Ro*M_lib['differential_rotation']
-    if 'tau' in M_lib:
-        A += M_lib['tau']
+    B = M_lib['mass'].copy()
+    A = M_lib.get('coriolis', 0) \
+        + Le*M_lib.get('lorentz_induction', 0) \
+        + E*M_lib.get('viscous_diffusion', 0) \
+        + Em*M_lib.get('magnetic_diffusion', 0) \
+        + Ro*M_lib.get('differential_rotation', 0) \
+        + M_lib.get('tau', 0)
     return A, B
 
 
@@ -113,7 +110,7 @@ def main():
 
     args = parser.parse_args()
     # Le_list = np.r_[0., np.logspace(-3, -2, num=5)[:-1], np.logspace(-2, -0.5, num=15)]
-    Le_list = np.r_[0, 0.005, 0.01, np.arange(0.02, 0.21, step=0.02)][:4]
+    Le_list = np.r_[0, 0.005, 0.01, np.arange(0.02, 0.07, step=0.01)]
     # Le_list = np.arange(0.022, 0.04, step=0.002)
     timer = timers.ProcTimer(start=True)
     print("\n============================================================================================")
